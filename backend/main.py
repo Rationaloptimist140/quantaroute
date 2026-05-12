@@ -6,7 +6,6 @@ import sys
 import os
 import csv
 import io
-from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
@@ -56,7 +55,7 @@ def health():
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):
-    if not file.filename.lower().endswith('.csv'):
+    if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
     contents = await file.read()
     decoded = contents.decode("utf-8-sig")
@@ -70,4 +69,30 @@ async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):
             continue
         if first.lower() in {"address", "addresses", "stop", "stops"}:
             continue
-        if first.startswith('{') or fir
+        addresses.append(first)
+    if len(addresses) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 addresses in CSV")
+    if len(addresses) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+    result = await optimise_route(addresses=addresses, driver_name=driver_name)
+    return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+
+@app.post("/quantum/route-optimise", response_model=RouteResponse)
+async def route_optimise(request: RouteRequest):
+    if len(request.addresses) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 addresses")
+    if len(request.addresses) > 50:
+        raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+    try:
+        result = await optimise_route(
+            addresses=request.addresses,
+            driver_name=request.driver_name
+        )
+        return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+    except Exception as e:
+        logger.error(f"Optimisation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

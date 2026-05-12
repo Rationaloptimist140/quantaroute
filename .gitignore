@@ -1,4 +1,7 @@
 venv/
+.venv*/
+.tmp/
+.python-packages/
 __pycache__/
 *.pyc
 .env

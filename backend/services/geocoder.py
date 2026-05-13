@@ -13,11 +13,14 @@ logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
 POSTCODES_URL = "https://api.postcodes.io/postcodes"
+TERMINATED_POSTCODES_URL = "https://api.postcodes.io/terminated_postcodes"
+OUTCODES_URL = "https://api.postcodes.io/outcodes"
 HEADERS = {"User-Agent": "QuantaRoute/1.0"}
 POSTCODE_RE = re.compile(
     r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b",
     re.IGNORECASE,
 )
+OUTCODE_RE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?)\b", re.IGNORECASE)
 
 
 def extract_uk_postcode(address: str) -> str | None:
@@ -27,10 +30,21 @@ def extract_uk_postcode(address: str) -> str | None:
     return re.sub(r"\s+", "", match.group(1).upper())
 
 
-async def geocode_postcode(client: httpx.AsyncClient, postcode: str) -> tuple | None:
+def extract_uk_outcode(address: str) -> str | None:
+    match = OUTCODE_RE.search(address)
+    if not match:
+        return None
+    return match.group(1).upper()
+
+
+async def lookup_postcode_endpoint(
+    client: httpx.AsyncClient,
+    base_url: str,
+    postcode: str,
+) -> tuple | None:
     try:
         r = await client.get(
-            f"{POSTCODES_URL}/{postcode}",
+            f"{base_url}/{postcode}",
             headers=HEADERS,
             timeout=10.0,
         )
@@ -43,7 +57,34 @@ async def geocode_postcode(client: httpx.AsyncClient, postcode: str) -> tuple | 
             return None
         return (float(result["latitude"]), float(result["longitude"]))
     except Exception as e:
-        logger.warning(f"Postcode lookup failed for {postcode}: {e}")
+        logger.warning(f"Postcode lookup failed for {postcode} at {base_url}: {e}")
+        return None
+
+
+async def geocode_postcode(client: httpx.AsyncClient, postcode: str) -> tuple | None:
+    return (
+        await lookup_postcode_endpoint(client, POSTCODES_URL, postcode)
+        or await lookup_postcode_endpoint(client, TERMINATED_POSTCODES_URL, postcode)
+    )
+
+
+async def geocode_outcode(client: httpx.AsyncClient, outcode: str) -> tuple | None:
+    try:
+        r = await client.get(
+            f"{OUTCODES_URL}/{outcode}",
+            headers=HEADERS,
+            timeout=10.0,
+        )
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        data = r.json()
+        result = data.get("result")
+        if not result:
+            return None
+        return (float(result["latitude"]), float(result["longitude"]))
+    except Exception as e:
+        logger.warning(f"Outcode lookup failed for {outcode}: {e}")
         return None
 
 
@@ -54,6 +95,12 @@ async def geocode_single(client: httpx.AsyncClient, address: str) -> tuple | Non
             coord = await geocode_postcode(client, postcode)
             if coord:
                 return coord
+        else:
+            outcode = extract_uk_outcode(address)
+            if outcode:
+                coord = await geocode_outcode(client, outcode)
+                if coord:
+                    return coord
 
         r = await client.get(
             NOMINATIM_URL,

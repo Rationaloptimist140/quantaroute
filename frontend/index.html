@@ -812,7 +812,7 @@
 
         renderResults(data);
       } catch (error) {
-        showMessage(`Route optimisation failed. Check that the API is running on https://quantaroute.onrender.com, then try again. ${error.message || ""}`.trim());
+        showMessage(`Route optimisation failed. ${error.message || "Please check the stops and try again."}`.trim());
       } finally {
         setLoading(false);
       }

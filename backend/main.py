@@ -112,6 +112,9 @@ async def route_optimise(request: RouteRequest):
             driver_name=request.driver_name
         )
         return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+    except ValueError as e:
+        logger.warning(f"Optimisation validation failed: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error(f"Optimisation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))

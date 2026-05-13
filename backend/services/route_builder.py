@@ -53,7 +53,11 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     valid_addresses = [addresses[i] for i in valid_indices]
 
     if len(valid_coords) < 2:
-        raise ValueError("Need at least 2 geocoded addresses")
+        failed_text = ", ".join(failed[:5]) if failed else "the provided stops"
+        raise ValueError(
+            f"Only {len(valid_coords)} stop(s) could be geocoded. "
+            f"Use full UK postcodes or add the town/city. Failed: {failed_text}"
+        )
 
     print(f"  Geocoded {len(valid_coords)}/{len(addresses)} addresses successfully")
 

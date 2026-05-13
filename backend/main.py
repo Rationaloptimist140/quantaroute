@@ -11,9 +11,9 @@ from pathlib import Path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
-from fastapi import FastAPI, HTTPException, UploadFile, File
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
@@ -43,9 +43,10 @@ ASSETS_DIR = FRONTEND_DIR / "assets"
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
-from database import get_recent_routes, init_db, save_route
+from database import get_recent_routes, init_db, record_allowed_route_use, save_route
 
 init_db()
+UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 
 
 def record_route_history(driver_name: str, result: dict) -> None:
@@ -53,6 +54,35 @@ def record_route_history(driver_name: str, result: dict) -> None:
         save_route(driver_name=driver_name, result=result)
     except Exception as e:
         logger.error(f"Failed to save route history: {e}")
+
+
+def get_client_identifier(request: Request) -> str:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    if request.client and request.client.host:
+        return request.client.host
+    return "unknown"
+
+
+def enforce_usage_limit(request: Request) -> JSONResponse | None:
+    identifier = get_client_identifier(request)
+    allowed, user = record_allowed_route_use(identifier)
+    if allowed:
+        logger.info(
+            "Usage allowed for %s; route_count=%s",
+            identifier,
+            user.get("route_count"),
+        )
+        return None
+
+    return JSONResponse(
+        status_code=402,
+        content={
+            "detail": "Free trial ended. Please upgrade to continue at £1.99 per route.",
+            "upgrade_url": UPGRADE_URL,
+        },
+    )
 
 class RouteRequest(BaseModel):
     addresses: list[str]
@@ -87,8 +117,12 @@ def frontend():
         },
     )
 
+@app.get("/pricing", include_in_schema=False)
+def pricing_page():
+    return frontend()
+
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
-async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):
+async def upload_csv(request: Request, file: UploadFile = File(...), driver_name: str = "Driver"):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
     contents = await file.read()
@@ -108,6 +142,9 @@ async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):
         raise HTTPException(status_code=400, detail="Need at least 2 addresses in CSV")
     if len(addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+    usage_response = enforce_usage_limit(request)
+    if usage_response:
+        return usage_response
     result = await optimise_route(addresses=addresses, driver_name=driver_name)
     record_route_history(driver_name=driver_name, result=result)
     return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
@@ -117,17 +154,20 @@ def route_history():
     return get_recent_routes(limit=50)
 
 @app.post("/quantum/route-optimise", response_model=RouteResponse)
-async def route_optimise(request: RouteRequest):
-    if len(request.addresses) < 2:
+async def route_optimise(route_request: RouteRequest, request: Request):
+    if len(route_request.addresses) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 addresses")
-    if len(request.addresses) > 50:
+    if len(route_request.addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+    usage_response = enforce_usage_limit(request)
+    if usage_response:
+        return usage_response
     try:
         result = await optimise_route(
-            addresses=request.addresses,
-            driver_name=request.driver_name
+            addresses=route_request.addresses,
+            driver_name=route_request.driver_name
         )
-        record_route_history(driver_name=request.driver_name, result=result)
+        record_route_history(driver_name=route_request.driver_name, result=result)
         return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
     except ValueError as e:
         logger.warning(f"Optimisation validation failed: {e}")

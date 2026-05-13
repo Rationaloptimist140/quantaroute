@@ -31,6 +31,10 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
   - Proposed launch offer: free first month.
   - No subscription lock-in and no per-driver fees.
   - Competitor framing: Routific, OptimoRoute, Zeo, and enRoute use monthly subscriptions and/or app-first workflows.
+- Current pricing implementation:
+  - Free for the first month, with usage tracked by client IP address.
+  - After 30 days, non-paying users receive HTTP `402` with an upgrade link.
+  - Payment collection is still a placeholder; Stripe checkout is marked as coming soon.
 
 ## Pitch Claims To Validate
 
@@ -45,11 +49,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `requirements.txt` - updated Python 3.14-compatible dependency pins.
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- `backend/main.py` - serves frontend at `/`, static assets at `/assets`, no-store frontend cache headers, route validation handling.
-- `backend/database.py` - SQLite route history storage, automatic database initialisation, save/list helpers.
+- `backend/main.py` - serves frontend at `/` and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, route history, and free-trial enforcement.
+- `backend/database.py` - SQLite route history storage, automatic database initialisation, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded.
-- `frontend/index.html` - complete mobile-first dark quantum-inspired frontend, live Render API URL, fuel-saving hero messaging, comparison strip, results info line, and collapsible route history.
+- `frontend/index.html` - complete mobile-first dark quantum-inspired frontend, live Render API URL, fuel-saving hero messaging, pricing banner/card, competitor table, `402` upgrade message, results info line, and collapsible route history.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
 
@@ -63,6 +67,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Backend now returns friendlier `400` errors for geocoding validation failures instead of generic `500`.
 - SQLite route history now initialises automatically and saves each successful JSON or CSV route optimisation.
 - `GET /routes/history` returns the last 50 saved routes.
+- SQLite `users` table tracks first use, route count, and paying status by IP address.
+- Backend blocks expired free-trial users with HTTP `402` and the frontend shows a friendly upgrade prompt.
 
 ## Remaining Issues
 
@@ -70,7 +76,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Some postcode/outcode results may be approximate, especially terminated or outward-only inputs.
 - Fuel saving percent is based on the current naive route comparison and can be low for already efficient input order.
 - Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
-- Payment/pricing flow for `£1.99 per route` and free first month is not implemented yet.
+- Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
+- Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.
 - The "up to 49%" marketing claim needs supporting data or should be adjusted to match proven results.
 - Render free tier can cold start, so first request may be slow.
 - The Render API key previously appeared in a screenshot and should be revoked/regenerated.
@@ -114,6 +121,12 @@ Route history:
 Invoke-RestMethod -Method Get -Uri "https://quantaroute.onrender.com/routes/history"
 ```
 
+Pricing page:
+
+```powershell
+Invoke-WebRequest -Uri "https://quantaroute.onrender.com/pricing" -UseBasicParsing
+```
+
 Route optimisation smoke test:
 
 ```powershell
@@ -147,3 +160,4 @@ Local SQLite database:
 - File path: `backend/quantaroute.db`
 - This file is ignored by Git.
 - It is created automatically on startup by `backend/database.py`.
+- Tables: `routes` for route history and `users` for free-trial usage tracking.

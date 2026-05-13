@@ -174,6 +174,25 @@
       color: var(--success);
     }
 
+    .pricing-banner {
+      display: grid;
+      gap: 6px;
+      margin: 14px 0 0;
+      padding: 12px;
+      border: 1px solid rgba(0, 212, 255, 0.24);
+      border-radius: 16px;
+      background: rgba(0, 212, 255, 0.08);
+      color: #ecfbff;
+      font-weight: 900;
+      line-height: 1.35;
+    }
+
+    .pricing-banner small {
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+    }
+
     .card {
       position: relative;
       margin-bottom: 18px;
@@ -351,6 +370,31 @@
       line-height: 1.5;
     }
 
+    .upgrade-panel {
+      color: #eaf8ff;
+    }
+
+    .upgrade-panel strong {
+      display: block;
+      margin-bottom: 6px;
+      color: var(--success);
+      font-size: 1.02rem;
+    }
+
+    .upgrade-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      margin-top: 12px;
+      padding: 0 14px;
+      border-radius: 13px;
+      background: var(--accent);
+      color: #03111b;
+      font-weight: 900;
+      text-decoration: none;
+    }
+
     .hidden {
       display: none !important;
     }
@@ -495,6 +539,89 @@
 
     .history-card {
       margin-top: 4px;
+    }
+
+    .pricing-card {
+      margin-top: 4px;
+    }
+
+    .section-title {
+      margin: 0 0 10px;
+      font-family: "Space Grotesk", Inter, sans-serif;
+      font-size: clamp(1.45rem, 6vw, 2.2rem);
+      line-height: 1.05;
+    }
+
+    .pricing-lead {
+      margin: 0 0 14px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .pricing-list {
+      display: grid;
+      gap: 9px;
+      margin: 0 0 18px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .pricing-list li {
+      padding: 11px 12px;
+      border: 1px solid rgba(0, 212, 255, 0.14);
+      border-radius: 14px;
+      background: rgba(10, 14, 26, 0.72);
+      color: #f4fbff;
+      font-weight: 850;
+      line-height: 1.4;
+    }
+
+    .pricing-table-wrap {
+      overflow-x: auto;
+      border: 1px solid rgba(0, 212, 255, 0.14);
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.72);
+    }
+
+    .pricing-table {
+      width: 100%;
+      min-width: 620px;
+      border-collapse: collapse;
+      color: #f4fbff;
+      font-size: 0.92rem;
+    }
+
+    .pricing-table th,
+    .pricing-table td {
+      padding: 13px 12px;
+      border-bottom: 1px solid rgba(170, 180, 200, 0.12);
+      text-align: center;
+      vertical-align: middle;
+    }
+
+    .pricing-table th:first-child,
+    .pricing-table td:first-child {
+      color: var(--muted);
+      font-weight: 900;
+      text-align: left;
+    }
+
+    .pricing-table tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .pricing-table .q-col {
+      color: var(--accent);
+      background: rgba(0, 212, 255, 0.08);
+      font-weight: 950;
+      text-shadow: 0 0 18px rgba(0, 212, 255, 0.18);
+    }
+
+    .payment-note {
+      margin: 14px 0 0;
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 0.92rem;
     }
 
     .history-header {
@@ -722,6 +849,10 @@
     <section class="hero-copy" aria-label="QuantaRoute fuel saving promise">
       <h2>Save up to <strong>49%</strong> on fuel costs.</h2>
       <p>Powered by Qiskit quantum simulation. A fraction of the cost of traditional route planners.</p>
+      <div class="pricing-banner">
+        <span>Free for your first month — unlimited routes.</span>
+        <small>After your free month: £1.99 per optimised route. No subscription. No monthly fee. Pay only when you use it. Cancel anytime.</small>
+      </div>
 
       <div class="proof-strip" aria-label="Product benefits">
         <div class="proof-pill">⚛️ Powered by Qiskit</div>
@@ -806,6 +937,65 @@
       </section>
     </main>
 
+    <section class="card pricing-card" id="pricing" aria-labelledby="pricingTitle">
+      <h2 class="section-title" id="pricingTitle">Simple Pricing</h2>
+      <p class="pricing-lead">Start free, prove the fuel savings, then pay only when you optimise a route.</p>
+
+      <ul class="pricing-list">
+        <li>Free for your first month — unlimited routes.</li>
+        <li>After your free month: £1.99 per optimised route.</li>
+        <li>No subscription. No monthly fee. Pay only when you use it.</li>
+        <li>Cancel anytime.</li>
+      </ul>
+
+      <div class="pricing-table-wrap" aria-label="Competitor comparison">
+        <table class="pricing-table">
+          <thead>
+            <tr>
+              <th scope="col"></th>
+              <th scope="col" class="q-col">QuantaRoute</th>
+              <th scope="col">Routific</th>
+              <th scope="col">OptimoRoute</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Price</td>
+              <td class="q-col">£1.99/route</td>
+              <td>£150+/month</td>
+              <td>£39+/driver/month</td>
+            </tr>
+            <tr>
+              <td>App required</td>
+              <td class="q-col">No</td>
+              <td>Yes</td>
+              <td>Yes</td>
+            </tr>
+            <tr>
+              <td>Quantum-inspired optimisation</td>
+              <td class="q-col">Yes</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Fuel saving shown</td>
+              <td class="q-col">Yes</td>
+              <td>No</td>
+              <td>No</td>
+            </tr>
+            <tr>
+              <td>Free trial</td>
+              <td class="q-col">1 month free</td>
+              <td>Limited</td>
+              <td>Limited</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="payment-note">How to pay: Stripe checkout is planned. Payment coming soon.</p>
+    </section>
+
     <section class="card history-card" aria-labelledby="historyTitle">
       <button class="history-toggle" id="historyToggle" type="button" aria-expanded="false" aria-controls="historyContent">
         <span id="historyTitle">Route History</span>
@@ -870,6 +1060,27 @@
 
     function showMessage(text) {
       message.textContent = text;
+      message.classList.remove("hidden");
+    }
+
+    function showUpgradeMessage(upgradeUrl) {
+      message.innerHTML = "";
+      const panel = document.createElement("div");
+      panel.className = "upgrade-panel";
+
+      const title = document.createElement("strong");
+      title.textContent = "Your free month has ended 🎉 You've been optimising routes like a pro!";
+
+      const copy = document.createElement("span");
+      copy.textContent = "Continue for just £1.99 per route.";
+
+      const link = document.createElement("a");
+      link.className = "upgrade-link";
+      link.href = upgradeUrl || "/pricing";
+      link.textContent = "Upgrade Now";
+
+      panel.append(title, copy, link);
+      message.appendChild(panel);
       message.classList.remove("hidden");
     }
 
@@ -1027,6 +1238,10 @@
         }
 
         if (!response.ok) {
+          if (response.status === 402) {
+            showUpgradeMessage(data.upgrade_url || "/pricing");
+            return;
+          }
           throw new Error(data.detail || "The optimisation service could not complete the route.");
         }
 
@@ -1047,6 +1262,10 @@
 
     refreshHistory.addEventListener("click", fetchHistory);
     fetchHistory();
+
+    if (window.location.pathname === "/pricing") {
+      document.querySelector("#pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
   </script>
 </body>
 </html>

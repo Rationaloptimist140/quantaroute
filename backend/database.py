@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +32,17 @@ def init_db() -> None:
                 ordered_addresses TEXT,
                 maps_url TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                identifier TEXT UNIQUE,
+                first_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                route_count INTEGER DEFAULT 0,
+                is_paying INTEGER DEFAULT 0
             )
             """
         )
@@ -98,3 +110,50 @@ def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
             record["ordered_addresses"] = []
         history.append(record)
     return history
+
+
+def get_or_create_user(identifier: str) -> dict[str, Any]:
+    init_db()
+    with get_connection() as conn:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (identifier) VALUES (?)",
+            (identifier,),
+        )
+        conn.commit()
+        row = conn.execute(
+            """
+            SELECT id, identifier, first_used, route_count, is_paying
+            FROM users
+            WHERE identifier = ?
+            """,
+            (identifier,),
+        ).fetchone()
+
+    if row is None:
+        raise RuntimeError("Could not create or load usage record")
+    return dict(row)
+
+
+def parse_sqlite_timestamp(value: str) -> datetime:
+    return datetime.fromisoformat(value.replace(" ", "T"))
+
+
+def is_within_free_month(first_used: str) -> bool:
+    trial_start_cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(days=30)
+    return parse_sqlite_timestamp(first_used) >= trial_start_cutoff
+
+
+def record_allowed_route_use(identifier: str) -> tuple[bool, dict[str, Any]]:
+    user = get_or_create_user(identifier)
+    if not is_within_free_month(user["first_used"]) and not int(user["is_paying"]):
+        return False, user
+
+    with get_connection() as conn:
+        conn.execute(
+            "UPDATE users SET route_count = route_count + 1 WHERE identifier = ?",
+            (identifier,),
+        )
+        conn.commit()
+
+    user = get_or_create_user(identifier)
+    return True, user

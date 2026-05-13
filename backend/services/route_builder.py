@@ -71,7 +71,17 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
 
     optimised_order = get_optimised_route(matrix)
     optimised_dist = calculate_total_distance(optimised_order, matrix)
-    fuel_saving = estimate_fuel_saving(naive_dist, optimised_dist)
+    if optimised_dist > naive_dist:
+        logger.warning(
+            "Optimised route was longer than naive order (%s km > %s km); using naive order",
+            optimised_dist,
+            naive_dist,
+        )
+        optimised_order = naive_order
+        optimised_dist = naive_dist
+        fuel_saving = 0.0
+    else:
+        fuel_saving = estimate_fuel_saving(naive_dist, optimised_dist)
 
     print(f"  Naive distance:     {naive_dist} km")
     print(f"  Optimised distance: {optimised_dist} km")

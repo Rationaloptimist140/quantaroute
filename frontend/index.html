@@ -1092,6 +1092,14 @@
       message.classList.add("hidden");
     }
 
+    function cleanDisplayedAddress(address) {
+      return String(address || "")
+        .trim()
+        .replace(/^\d+\s*,\s*["']?\s*/, "")
+        .replace(/["']?\s*,?\s*$/, "")
+        .trim();
+    }
+
     function setLoading(isLoading) {
       submitButton.disabled = isLoading;
       loadingState.classList.toggle("hidden", !isLoading);
@@ -1115,7 +1123,7 @@
         pin.className = "pin";
         pin.textContent = "📍";
         text.className = "stop-text";
-        text.textContent = `${index + 1}. ${address}`;
+        text.textContent = cleanDisplayedAddress(address);
 
         item.append(pin, text);
         stopList.appendChild(item);

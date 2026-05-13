@@ -84,6 +84,96 @@
       line-height: 1.35;
     }
 
+    .hero-copy {
+      margin: 0 0 18px;
+      padding: 18px;
+      border: 1px solid rgba(0, 212, 255, 0.22);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(145deg, rgba(0, 212, 255, 0.08), rgba(0, 255, 136, 0.035)),
+        rgba(17, 24, 39, 0.72);
+      box-shadow: 0 18px 70px rgba(0, 0, 0, 0.32);
+      animation: rise 560ms ease both;
+    }
+
+    .hero-copy h2 {
+      margin: 0;
+      color: var(--text);
+      font-family: "Space Grotesk", Inter, sans-serif;
+      font-size: clamp(1.65rem, 8vw, 3rem);
+      line-height: 1.02;
+      letter-spacing: 0;
+    }
+
+    .hero-copy h2 strong {
+      color: var(--success);
+      text-shadow: 0 0 30px rgba(0, 255, 136, 0.28);
+    }
+
+    .hero-copy p {
+      margin: 12px 0 0;
+      color: #d8e2f5;
+      font-size: clamp(0.95rem, 3.6vw, 1.08rem);
+      line-height: 1.55;
+    }
+
+    .proof-strip {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 0;
+    }
+
+    .proof-pill {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid rgba(0, 212, 255, 0.16);
+      border-radius: 14px;
+      background: rgba(10, 14, 26, 0.7);
+      color: #eff7ff;
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .comparison {
+      display: grid;
+      gap: 8px;
+      margin: 14px 0 0;
+    }
+
+    .compare-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      min-height: 42px;
+      padding: 10px 12px;
+      border-radius: 14px;
+      background: rgba(10, 14, 26, 0.66);
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .compare-row.featured {
+      border: 1px solid rgba(0, 255, 136, 0.28);
+      background: rgba(0, 255, 136, 0.08);
+      color: var(--text);
+      box-shadow: 0 0 28px rgba(0, 255, 136, 0.08);
+    }
+
+    .compare-price {
+      color: var(--text);
+      font-weight: 900;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .compare-row.featured .compare-price {
+      color: var(--success);
+    }
+
     .card {
       position: relative;
       margin-bottom: 18px;
@@ -308,7 +398,8 @@
       margin: 0;
       color: var(--success);
       font-family: "Space Grotesk", Inter, sans-serif;
-      font-size: clamp(2.5rem, 14vw, 4.2rem);
+      font-size: clamp(4.2rem, 24vw, 7.8rem);
+      font-weight: 700;
       line-height: 0.98;
       text-shadow: 0 0 30px rgba(0, 255, 136, 0.26);
     }
@@ -429,6 +520,14 @@
         text-align: left;
       }
 
+      .hero-copy {
+        padding: 26px;
+      }
+
+      .proof-strip {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
       .desktop-grid {
         display: grid;
         grid-template-columns: minmax(0, 1fr) minmax(340px, 0.86fr);
@@ -489,6 +588,32 @@
         <p class="tagline">Quantum Route Optimisation for UK Couriers</p>
       </div>
     </header>
+
+    <section class="hero-copy" aria-label="QuantaRoute fuel saving promise">
+      <h2>Save up to <strong>49%</strong> on fuel costs.</h2>
+      <p>Powered by quantum computing. A fraction of the cost of traditional route planners.</p>
+
+      <div class="proof-strip" aria-label="Product benefits">
+        <div class="proof-pill">⚛️ Quantum Powered</div>
+        <div class="proof-pill">💰 Up to 49% Fuel Saved</div>
+        <div class="proof-pill">💷 Fraction of the Cost</div>
+      </div>
+
+      <div class="comparison" aria-label="Price comparison">
+        <div class="compare-row featured">
+          <span>QuantaRoute</span>
+          <span class="compare-price">Fraction of the cost</span>
+        </div>
+        <div class="compare-row">
+          <span>Routific</span>
+          <span class="compare-price">£50-200/month</span>
+        </div>
+        <div class="compare-row">
+          <span>OptimoRoute</span>
+          <span class="compare-price">£50-200/month</span>
+        </div>
+      </div>
+    </section>
 
     <main class="desktop-grid">
       <section class="card" aria-labelledby="planner-title">

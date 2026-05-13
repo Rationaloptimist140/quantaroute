@@ -676,9 +676,7 @@
   </div>
 
   <script>
-    const API_URL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname)
-      ? "http://localhost:8000/quantum/route-optimise"
-      : "/quantum/route-optimise";
+    const API_URL = "https://quantaroute.onrender.com/quantum/route-optimise";
 
     const form = document.querySelector("#routeForm");
     const driverName = document.querySelector("#driverName");
@@ -814,7 +812,7 @@
 
         renderResults(data);
       } catch (error) {
-        showMessage(`Route optimisation failed. Check that the API is running on localhost:8000, then try again. ${error.message || ""}`.trim());
+        showMessage(`Route optimisation failed. Check that the API is running on https://quantaroute.onrender.com, then try again. ${error.message || ""}`.trim());
       } finally {
         setLoading(false);
       }

@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuantaRoute</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0A0E1A;
+      --card: #111827;
+      --card-soft: #151f32;
+      --accent: #00D4FF;
+      --success: #00FF88;
+      --text: #ffffff;
+      --muted: #aab4c8;
+      --line: rgba(0, 212, 255, 0.22);
+      --danger: #ff6b8a;
+      --radius: 22px;
+      --shadow: 0 24px 90px rgba(0, 0, 0, 0.45);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      min-width: 320px;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, sans-serif;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(0, 212, 255, 0.22), transparent 18rem),
+        radial-gradient(circle at 100% 20%, rgba(0, 255, 136, 0.08), transparent 18rem),
+        linear-gradient(180deg, #0A0E1A 0%, #060913 100%);
+      color: var(--text);
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .app {
+      width: min(100% - 24px, 520px);
+      margin: 0 auto;
+      padding: 22px 0 36px;
+    }
+
+    .hero {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 8px 2px 22px;
+      animation: rise 520ms ease both;
+    }
+
+    .logo {
+      width: 58px;
+      height: 58px;
+      flex: 0 0 auto;
+      filter: drop-shadow(0 0 22px rgba(0, 212, 255, 0.45));
+    }
+
+    .brand-title {
+      margin: 0;
+      font-family: "Space Grotesk", Inter, sans-serif;
+      font-size: clamp(1.9rem, 9vw, 2.55rem);
+      line-height: 0.95;
+      letter-spacing: 0;
+    }
+
+    .tagline {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: clamp(0.86rem, 3.5vw, 1rem);
+      line-height: 1.35;
+    }
+
+    .card {
+      position: relative;
+      margin-bottom: 18px;
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(145deg, rgba(0, 212, 255, 0.05), rgba(255, 255, 255, 0.015)),
+        var(--card);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      overflow: hidden;
+      animation: rise 620ms ease both;
+    }
+
+    .card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(0, 212, 255, 0.18), transparent 28%, transparent 72%, rgba(0, 255, 136, 0.1));
+      opacity: 0.55;
+    }
+
+    .card > * {
+      position: relative;
+      z-index: 1;
+    }
+
+    .field {
+      margin-bottom: 16px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #f6f9ff;
+      font-weight: 800;
+      font-size: 0.92rem;
+    }
+
+    input,
+    textarea {
+      width: 100%;
+      border: 1px solid rgba(170, 180, 200, 0.2);
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.9);
+      color: var(--text);
+      outline: none;
+      transition: border 180ms ease, box-shadow 180ms ease, transform 180ms ease;
+    }
+
+    input {
+      height: 52px;
+      padding: 0 15px;
+    }
+
+    textarea {
+      min-height: 168px;
+      padding: 15px;
+      line-height: 1.5;
+      resize: vertical;
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: #6f7b92;
+    }
+
+    input:focus,
+    textarea:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 4px rgba(0, 212, 255, 0.12), 0 0 28px rgba(0, 212, 255, 0.16);
+    }
+
+    .upload-row {
+      display: grid;
+      gap: 10px;
+      margin: -2px 0 18px;
+    }
+
+    .upload-button {
+      min-height: 50px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      border: 1px dashed rgba(0, 212, 255, 0.46);
+      border-radius: 16px;
+      background: rgba(0, 212, 255, 0.07);
+      color: var(--text);
+      font-weight: 900;
+      cursor: pointer;
+      transition: transform 180ms ease, border 180ms ease, background 180ms ease;
+    }
+
+    .upload-button:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      background: rgba(0, 212, 255, 0.12);
+    }
+
+    .upload-button input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .file-status {
+      min-height: 18px;
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.86rem;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
+    .primary {
+      width: 100%;
+      min-height: 60px;
+      border: 0;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #00D4FF 0%, #61ecff 45%, #00FF88 140%);
+      color: #03111b;
+      font-size: 1.05rem;
+      font-weight: 900;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      box-shadow: 0 0 24px rgba(0, 212, 255, 0.42), 0 16px 38px rgba(0, 212, 255, 0.18);
+      transition: transform 180ms ease, filter 180ms ease, opacity 180ms ease;
+    }
+
+    .primary:hover {
+      transform: translateY(-2px);
+      filter: brightness(1.07);
+    }
+
+    .primary:disabled {
+      cursor: not-allowed;
+      opacity: 0.72;
+      transform: none;
+      filter: none;
+    }
+
+    .loading {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      min-height: 44px;
+      margin-top: 14px;
+      color: var(--accent);
+      font-weight: 800;
+    }
+
+    .spinner {
+      width: 22px;
+      height: 22px;
+      border: 3px solid rgba(0, 212, 255, 0.18);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 760ms linear infinite;
+      box-shadow: 0 0 16px rgba(0, 212, 255, 0.35);
+    }
+
+    .message {
+      margin-top: 14px;
+      padding: 13px 14px;
+      border: 1px solid rgba(255, 107, 138, 0.34);
+      border-radius: 16px;
+      background: rgba(255, 107, 138, 0.1);
+      color: #ffd5dd;
+      line-height: 1.5;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    .results-card {
+      animation-delay: 90ms;
+    }
+
+    .empty-state {
+      margin: 0;
+      color: var(--muted);
+      text-align: center;
+      line-height: 1.55;
+    }
+
+    .saving-wrap {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .saving-icon {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      background: rgba(0, 255, 136, 0.12);
+      box-shadow: inset 0 0 24px rgba(0, 255, 136, 0.08), 0 0 24px rgba(0, 255, 136, 0.15);
+      font-size: 1.5rem;
+    }
+
+    .saving-label {
+      margin: 0 0 2px;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .saving-value {
+      margin: 0;
+      color: var(--success);
+      font-family: "Space Grotesk", Inter, sans-serif;
+      font-size: clamp(2.5rem, 14vw, 4.2rem);
+      line-height: 0.98;
+      text-shadow: 0 0 30px rgba(0, 255, 136, 0.26);
+    }
+
+    .distance {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      margin: 0 0 18px;
+      padding: 13px 14px;
+      border: 1px solid rgba(0, 212, 255, 0.16);
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.7);
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .distance strong {
+      color: var(--text);
+      text-align: right;
+    }
+
+    .stop-list {
+      display: grid;
+      gap: 10px;
+      margin: 0 0 18px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .stop-list li {
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid rgba(170, 180, 200, 0.14);
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.72);
+      animation: pop 260ms ease both;
+    }
+
+    .pin {
+      color: var(--accent);
+      filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.45));
+    }
+
+    .stop-text {
+      min-width: 0;
+      color: #edf4ff;
+      font-weight: 800;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .actions {
+      display: grid;
+      gap: 10px;
+    }
+
+    .action {
+      min-height: 52px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      border: 1px solid rgba(0, 212, 255, 0.24);
+      border-radius: 16px;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--text);
+      font-weight: 900;
+      text-decoration: none;
+      transition: transform 180ms ease, background 180ms ease, border 180ms ease;
+    }
+
+    .action:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+      background: rgba(0, 212, 255, 0.14);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes rise {
+      from {
+        opacity: 0;
+        transform: translateY(12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes pop {
+      from {
+        opacity: 0;
+        transform: scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    @media (min-width: 820px) {
+      .app {
+        width: min(100% - 48px, 980px);
+        padding-top: 40px;
+      }
+
+      .hero {
+        justify-content: center;
+        text-align: left;
+      }
+
+      .desktop-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(340px, 0.86fr);
+        gap: 22px;
+        align-items: start;
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      textarea {
+        min-height: 220px;
+      }
+
+      .actions {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 390px) {
+      .app {
+        width: min(100% - 18px, 520px);
+        padding-top: 14px;
+      }
+
+      .hero {
+        gap: 11px;
+      }
+
+      .logo {
+        width: 50px;
+        height: 50px;
+      }
+
+      .card {
+        padding: 17px;
+        border-radius: 20px;
+      }
+
+      .saving-wrap {
+        grid-template-columns: 1fr;
+        text-align: center;
+      }
+
+      .saving-icon {
+        margin: 0 auto;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="hero">
+      <img class="logo" src="assets/quantaroute-logo.svg" alt="QuantaRoute atom route pin logo" />
+      <div>
+        <h1 class="brand-title">QuantaRoute</h1>
+        <p class="tagline">Quantum Route Optimisation for UK Couriers</p>
+      </div>
+    </header>
+
+    <main class="desktop-grid">
+      <section class="card" aria-labelledby="planner-title">
+        <form id="routeForm">
+          <div class="field">
+            <label for="driverName">Driver Name</label>
+            <input id="driverName" type="text" autocomplete="name" placeholder="Driver name" value="Driver" />
+          </div>
+
+          <div class="field">
+            <label for="addresses">Addresses</label>
+            <textarea id="addresses" placeholder="Plymouth PL1&#10;Exeter EX1&#10;Bristol BS1"></textarea>
+          </div>
+
+          <div class="upload-row">
+            <label class="upload-button" for="csvFile">
+              📎 Upload CSV
+              <input id="csvFile" type="file" accept=".csv,text/csv" />
+            </label>
+            <p class="file-status" id="fileStatus">Paste one stop per line, or upload a CSV with addresses in the first column.</p>
+          </div>
+
+          <button class="primary" id="submitButton" type="submit">⚛️ Optimise Route</button>
+
+          <div class="loading hidden" id="loadingState">
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Quantum computing your route...</span>
+          </div>
+
+          <div class="message hidden" id="message" role="alert"></div>
+        </form>
+      </section>
+
+      <section class="card results-card" aria-live="polite">
+        <p class="empty-state" id="emptyState">Your optimised route, fuel saving, and share links will appear here.</p>
+
+        <div id="resultsState" class="hidden">
+          <div class="saving-wrap">
+            <div class="saving-icon" aria-hidden="true">💰</div>
+            <div>
+              <p class="saving-label">Fuel saved</p>
+              <p class="saving-value" id="fuelSaving">0%</p>
+            </div>
+          </div>
+
+          <p class="distance">
+            <span>Total distance</span>
+            <strong id="totalDistance">0 km</strong>
+          </p>
+
+          <ol class="stop-list" id="stopList"></ol>
+
+          <div class="actions">
+            <a class="action" id="mapsButton" href="#" target="_blank" rel="noopener">🗺️ Google Maps</a>
+            <a class="action" id="whatsappButton" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    const API_URL = ["localhost", "127.0.0.1", ""].includes(window.location.hostname)
+      ? "http://localhost:8000/quantum/route-optimise"
+      : "/quantum/route-optimise";
+
+    const form = document.querySelector("#routeForm");
+    const driverName = document.querySelector("#driverName");
+    const addresses = document.querySelector("#addresses");
+    const csvFile = document.querySelector("#csvFile");
+    const fileStatus = document.querySelector("#fileStatus");
+    const submitButton = document.querySelector("#submitButton");
+    const loadingState = document.querySelector("#loadingState");
+    const message = document.querySelector("#message");
+    const emptyState = document.querySelector("#emptyState");
+    const resultsState = document.querySelector("#resultsState");
+    const fuelSaving = document.querySelector("#fuelSaving");
+    const totalDistance = document.querySelector("#totalDistance");
+    const stopList = document.querySelector("#stopList");
+    const mapsButton = document.querySelector("#mapsButton");
+    const whatsappButton = document.querySelector("#whatsappButton");
+
+    let csvAddresses = [];
+
+    function parseCsv(text) {
+      return text
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((line) => {
+          const firstCell = line.match(/^"([^"]+)"|^([^,]+)/);
+          return firstCell ? (firstCell[1] || firstCell[2]).trim() : "";
+        })
+        .filter((value) => value && !["address", "addresses", "stop", "stops"].includes(value.toLowerCase()));
+    }
+
+    function parseTextarea() {
+      return addresses.value
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean);
+    }
+
+    function showMessage(text) {
+      message.textContent = text;
+      message.classList.remove("hidden");
+    }
+
+    function clearMessage() {
+      message.textContent = "";
+      message.classList.add("hidden");
+    }
+
+    function setLoading(isLoading) {
+      submitButton.disabled = isLoading;
+      loadingState.classList.toggle("hidden", !isLoading);
+    }
+
+    function renderResults(data) {
+      emptyState.classList.add("hidden");
+      resultsState.classList.remove("hidden");
+
+      fuelSaving.textContent = `${Number(data.fuel_saving_percent || 0).toFixed(1)}%`;
+      totalDistance.textContent = `${Number(data.total_distance_km || 0).toFixed(1)} km`;
+      mapsButton.href = data.maps_url || "#";
+      whatsappButton.href = data.whatsapp_url || "#";
+
+      stopList.innerHTML = "";
+      (data.ordered_addresses || []).forEach((address, index) => {
+        const item = document.createElement("li");
+        const pin = document.createElement("span");
+        const text = document.createElement("span");
+
+        pin.className = "pin";
+        pin.textContent = "📍";
+        text.className = "stop-text";
+        text.textContent = `${index + 1}. ${address}`;
+
+        item.append(pin, text);
+        stopList.appendChild(item);
+      });
+    }
+
+    csvFile.addEventListener("change", async () => {
+      clearMessage();
+      const file = csvFile.files[0];
+      csvAddresses = [];
+
+      if (!file) {
+        fileStatus.textContent = "Paste one stop per line, or upload a CSV with addresses in the first column.";
+        return;
+      }
+
+      try {
+        csvAddresses = parseCsv(await file.text());
+        fileStatus.textContent = `${file.name} loaded with ${csvAddresses.length} stops.`;
+        if (csvAddresses.length) {
+          addresses.value = csvAddresses.join("\n");
+        }
+      } catch (error) {
+        fileStatus.textContent = file.name;
+        showMessage("I could not read that CSV. Try another file or paste the addresses instead.");
+      }
+    });
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      clearMessage();
+
+      const stops = parseTextarea();
+      if (stops.length < 2) {
+        showMessage("Add at least two stops before optimising the route.");
+        return;
+      }
+
+      setLoading(true);
+
+      try {
+        const response = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            addresses: stops,
+            driver_name: driverName.value.trim() || "Driver"
+          })
+        });
+
+        let data = {};
+        try {
+          data = await response.json();
+        } catch (error) {
+          data = {};
+        }
+
+        if (!response.ok) {
+          throw new Error(data.detail || "The optimisation service could not complete the route.");
+        }
+
+        renderResults(data);
+      } catch (error) {
+        showMessage(`Route optimisation failed. Check that the API is running on localhost:8000, then try again. ${error.message || ""}`.trim());
+      } finally {
+        setLoading(false);
+      }
+    });
+  </script>
+</body>
+</html>

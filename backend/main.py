@@ -6,12 +6,15 @@ import sys
 import os
 import csv
 import io
+from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 
@@ -33,6 +36,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIR = BASE_DIR.parent / "frontend"
+ASSETS_DIR = FRONTEND_DIR / "assets"
+
+if ASSETS_DIR.exists():
+    app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
 class RouteRequest(BaseModel):
     addresses: list[str]
     driver_name: str = "Driver"
@@ -52,6 +62,13 @@ class RouteResponse(BaseModel):
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "QuantaRoute API", "version": "1.0.0"}
+
+@app.get("/", include_in_schema=False)
+def frontend():
+    index_path = FRONTEND_DIR / "index.html"
+    if not index_path.exists():
+        raise HTTPException(status_code=404, detail="Frontend not found")
+    return FileResponse(index_path)
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):

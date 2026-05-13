@@ -65,7 +65,7 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     matrix = build_distance_matrix(valid_coords)
     print(f"  Matrix built: {matrix.shape[0]}x{matrix.shape[1]}")
 
-    print(f"\n[3/4] Running quantum optimisation...")
+    print(f"\n[3/4] Running route optimisation...")
     naive_order = list(range(len(valid_coords)))
     naive_dist = calculate_total_distance(naive_order, matrix)
 

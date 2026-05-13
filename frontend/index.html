@@ -422,6 +422,18 @@
       text-align: right;
     }
 
+    .method-info {
+      margin: -4px 0 18px;
+      padding: 11px 12px;
+      border: 1px solid rgba(0, 212, 255, 0.16);
+      border-radius: 14px;
+      background: rgba(0, 212, 255, 0.06);
+      color: #cfe9f5;
+      font-size: 0.84rem;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
     .stop-list {
       display: grid;
       gap: 10px;
@@ -479,6 +491,124 @@
       transform: translateY(-1px);
       border-color: var(--accent);
       background: rgba(0, 212, 255, 0.14);
+    }
+
+    .history-card {
+      margin-top: 4px;
+    }
+
+    .history-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .history-toggle,
+    .refresh-button {
+      border: 1px solid rgba(0, 212, 255, 0.22);
+      border-radius: 14px;
+      background: rgba(0, 212, 255, 0.08);
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 900;
+      transition: transform 180ms ease, background 180ms ease, border 180ms ease;
+    }
+
+    .history-toggle {
+      display: flex;
+      width: 100%;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 48px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      text-align: left;
+      font-size: 1.05rem;
+    }
+
+    .history-toggle span:last-child {
+      color: var(--accent);
+      transition: transform 180ms ease;
+    }
+
+    .history-toggle[aria-expanded="true"] span:last-child {
+      transform: rotate(180deg);
+    }
+
+    .refresh-button {
+      min-height: 40px;
+      padding: 0 13px;
+      white-space: nowrap;
+    }
+
+    .refresh-button:hover,
+    .history-toggle:hover {
+      border-color: var(--accent);
+      background: rgba(0, 212, 255, 0.12);
+    }
+
+    .history-content {
+      margin-top: 14px;
+      border-top: 1px solid rgba(0, 212, 255, 0.12);
+      padding-top: 14px;
+    }
+
+    .history-empty {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .history-list {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0 0;
+    }
+
+    .history-item {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+      border: 1px solid rgba(170, 180, 200, 0.14);
+      border-radius: 16px;
+      background: rgba(10, 14, 26, 0.72);
+    }
+
+    .history-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .history-driver {
+      color: #f7fbff;
+      font-weight: 900;
+      overflow-wrap: anywhere;
+    }
+
+    .history-date {
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 800;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .history-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 800;
+    }
+
+    .history-saving {
+      color: var(--success);
     }
 
     @keyframes spin {
@@ -585,16 +715,16 @@
       <img class="logo" src="assets/quantaroute-logo.svg" alt="QuantaRoute atom route pin logo" />
       <div>
         <h1 class="brand-title">QuantaRoute</h1>
-        <p class="tagline">Quantum Route Optimisation for UK Couriers</p>
+        <p class="tagline">Quantum-Inspired Route Optimisation for UK Couriers</p>
       </div>
     </header>
 
     <section class="hero-copy" aria-label="QuantaRoute fuel saving promise">
       <h2>Save up to <strong>49%</strong> on fuel costs.</h2>
-      <p>Powered by quantum computing. A fraction of the cost of traditional route planners.</p>
+      <p>Powered by Qiskit quantum simulation. A fraction of the cost of traditional route planners.</p>
 
       <div class="proof-strip" aria-label="Product benefits">
-        <div class="proof-pill">⚛️ Quantum Powered</div>
+        <div class="proof-pill">⚛️ Powered by Qiskit</div>
         <div class="proof-pill">💰 Up to 49% Fuel Saved</div>
         <div class="proof-pill">💷 Fraction of the Cost</div>
       </div>
@@ -640,7 +770,7 @@
 
           <div class="loading hidden" id="loadingState">
             <span class="spinner" aria-hidden="true"></span>
-            <span>Quantum computing your route...</span>
+            <span>Running quantum-inspired optimisation...</span>
           </div>
 
           <div class="message hidden" id="message" role="alert"></div>
@@ -664,6 +794,8 @@
             <strong id="totalDistance">0 km</strong>
           </p>
 
+          <p class="method-info">Routes with 8–20 stops use Qiskit QAOA quantum simulation. Smaller routes use exact brute-force optimisation.</p>
+
           <ol class="stop-list" id="stopList"></ol>
 
           <div class="actions">
@@ -673,10 +805,26 @@
         </div>
       </section>
     </main>
+
+    <section class="card history-card" aria-labelledby="historyTitle">
+      <button class="history-toggle" id="historyToggle" type="button" aria-expanded="false" aria-controls="historyContent">
+        <span id="historyTitle">Route History</span>
+        <span aria-hidden="true">⌄</span>
+      </button>
+
+      <div class="history-content hidden" id="historyContent">
+        <div class="history-header">
+          <p class="history-empty" id="historyStatus">Loading route history...</p>
+          <button class="refresh-button" id="refreshHistory" type="button">Refresh</button>
+        </div>
+        <div class="history-list" id="historyList"></div>
+      </div>
+    </section>
   </div>
 
   <script>
     const API_URL = "https://quantaroute.onrender.com/quantum/route-optimise";
+    const HISTORY_URL = "https://quantaroute.onrender.com/routes/history";
 
     const form = document.querySelector("#routeForm");
     const driverName = document.querySelector("#driverName");
@@ -693,6 +841,11 @@
     const stopList = document.querySelector("#stopList");
     const mapsButton = document.querySelector("#mapsButton");
     const whatsappButton = document.querySelector("#whatsappButton");
+    const historyToggle = document.querySelector("#historyToggle");
+    const historyContent = document.querySelector("#historyContent");
+    const historyStatus = document.querySelector("#historyStatus");
+    const historyList = document.querySelector("#historyList");
+    const refreshHistory = document.querySelector("#refreshHistory");
 
     let csvAddresses = [];
 
@@ -755,6 +908,73 @@
       });
     }
 
+    function formatHistoryDate(value) {
+      if (!value) {
+        return "Unknown date";
+      }
+
+      const date = new Date(value.endsWith("Z") ? value : `${value}Z`);
+      if (Number.isNaN(date.getTime())) {
+        return value;
+      }
+
+      return date.toLocaleDateString("en-GB", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
+    }
+
+    function renderHistory(routes) {
+      historyList.innerHTML = "";
+
+      if (!routes.length) {
+        historyStatus.textContent = "No routes yet — optimise your first route above!";
+        return;
+      }
+
+      historyStatus.textContent = `${routes.length} recent route${routes.length === 1 ? "" : "s"}`;
+      routes.forEach((route) => {
+        const item = document.createElement("article");
+        item.className = "history-item";
+        item.innerHTML = `
+          <div class="history-top">
+            <span class="history-driver"></span>
+            <span class="history-date"></span>
+          </div>
+          <div class="history-meta">
+            <span></span>
+            <span class="history-saving"></span>
+            <span></span>
+          </div>
+        `;
+
+        item.querySelector(".history-driver").textContent = route.driver_name || "Driver";
+        item.querySelector(".history-date").textContent = formatHistoryDate(route.created_at);
+        const meta = item.querySelectorAll(".history-meta span");
+        meta[0].textContent = `${route.stops_count || 0} stops`;
+        meta[1].textContent = `${Number(route.fuel_saving_percent || 0).toFixed(1)}% fuel saved`;
+        meta[2].textContent = `${Number(route.total_distance_km || 0).toFixed(1)} km`;
+        historyList.appendChild(item);
+      });
+    }
+
+    async function fetchHistory() {
+      historyStatus.textContent = "Loading route history...";
+      try {
+        const response = await fetch(HISTORY_URL);
+        if (!response.ok) {
+          throw new Error("History is unavailable right now.");
+        }
+        renderHistory(await response.json());
+      } catch (error) {
+        historyList.innerHTML = "";
+        historyStatus.textContent = error.message || "Could not load route history.";
+      }
+    }
+
     csvFile.addEventListener("change", async () => {
       clearMessage();
       const file = csvFile.files[0];
@@ -811,12 +1031,22 @@
         }
 
         renderResults(data);
+        fetchHistory();
       } catch (error) {
         showMessage(`Route optimisation failed. ${error.message || "Please check the stops and try again."}`.trim());
       } finally {
         setLoading(false);
       }
     });
+
+    historyToggle.addEventListener("click", () => {
+      const expanded = historyToggle.getAttribute("aria-expanded") === "true";
+      historyToggle.setAttribute("aria-expanded", String(!expanded));
+      historyContent.classList.toggle("hidden", expanded);
+    });
+
+    refreshHistory.addEventListener("click", fetchHistory);
+    fetchHistory();
   </script>
 </body>
 </html>

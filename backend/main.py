@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="QuantaRoute API",
-    description="Quantum-powered delivery route optimisation for UK couriers",
+    description="Qiskit-powered quantum-inspired delivery route optimisation for UK couriers",
     version="1.0.0"
 )
 
@@ -42,6 +42,17 @@ ASSETS_DIR = FRONTEND_DIR / "assets"
 
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
+
+from database import get_recent_routes, init_db, save_route
+
+init_db()
+
+
+def record_route_history(driver_name: str, result: dict) -> None:
+    try:
+        save_route(driver_name=driver_name, result=result)
+    except Exception as e:
+        logger.error(f"Failed to save route history: {e}")
 
 class RouteRequest(BaseModel):
     addresses: list[str]
@@ -98,7 +109,12 @@ async def upload_csv(file: UploadFile = File(...), driver_name: str = "Driver"):
     if len(addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
     result = await optimise_route(addresses=addresses, driver_name=driver_name)
+    record_route_history(driver_name=driver_name, result=result)
     return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+
+@app.get("/routes/history")
+def route_history():
+    return get_recent_routes(limit=50)
 
 @app.post("/quantum/route-optimise", response_model=RouteResponse)
 async def route_optimise(request: RouteRequest):
@@ -111,6 +127,7 @@ async def route_optimise(request: RouteRequest):
             addresses=request.addresses,
             driver_name=request.driver_name
         )
+        record_route_history(driver_name=request.driver_name, result=result)
         return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
     except ValueError as e:
         logger.warning(f"Optimisation validation failed: {e}")

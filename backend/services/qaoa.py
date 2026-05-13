@@ -1,6 +1,6 @@
 """
 QuantaRoute — QAOA Route Optimiser
-Uses Quantum Approximate Optimisation Algorithm to find optimal delivery route order.
+Uses Qiskit QAOA quantum simulation for quantum-inspired route optimisation.
 Compatible with Qiskit 2.4.0, qiskit-algorithms 0.4.0, qiskit-optimization 0.7.0
 """
 
@@ -25,14 +25,14 @@ def calculate_total_distance(order: list[int], matrix: np.ndarray) -> float:
     return round(total, 2)
 
 
-def estimate_fuel_saving(classical_dist: float, quantum_dist: float) -> float:
+def estimate_fuel_saving(classical_dist: float, optimised_dist: float) -> float:
     """
-    Estimate fuel saving percentage of quantum vs classical route.
-    Returns positive % if quantum is better, negative if worse.
+    Estimate fuel saving percentage of optimised vs naive route.
+    Returns positive % if the optimised route is better, negative if worse.
     """
     if classical_dist == 0:
         return 0.0
-    saving = ((classical_dist - quantum_dist) / classical_dist) * 100
+    saving = ((classical_dist - optimised_dist) / classical_dist) * 100
     return round(saving, 2)
 
 
@@ -43,7 +43,7 @@ def estimate_fuel_saving(classical_dist: float, quantum_dist: float) -> float:
 def nearest_neighbour_route(matrix: np.ndarray) -> list[int]:
     """
     Greedy nearest-neighbour heuristic.
-    Used as fallback if quantum optimisation fails.
+    Used as fallback if Qiskit QAOA simulation fails.
     Always starts from depot (index 0).
     """
     n = len(matrix)
@@ -66,7 +66,7 @@ def nearest_neighbour_route(matrix: np.ndarray) -> list[int]:
 
 def brute_force_route(matrix: np.ndarray) -> list[int]:
     """
-    Exact solution via brute force for small problems (n ≤ 8).
+    Exact solution via brute force for small problems (n < 8).
     Fixes depot at index 0, permutes remaining stops.
     """
     n = len(matrix)
@@ -90,7 +90,7 @@ def brute_force_route(matrix: np.ndarray) -> list[int]:
 
 def qaoa_route(matrix: np.ndarray) -> list[int]:
     """
-    QAOA-based route optimiser using Qiskit 2.4.0.
+    Qiskit QAOA simulation route optimiser.
     Formulates TSP as a QUBO and solves with QAOA + COBYLA.
     """
     from qiskit_algorithms import QAOA
@@ -154,8 +154,8 @@ def get_optimised_route(distance_matrix: np.ndarray) -> list[int]:
     Main function — returns optimally ordered list of stop indices.
 
     Strategy:
-    - n <= 8:  brute force (exact, fast)
-    - n <= 20: QAOA quantum optimisation
+    - n < 8:   brute force (exact, fast)
+    - n <= 20: Qiskit QAOA quantum simulation
     - n > 20:  nearest-neighbour (fast heuristic)
     - fallback: nearest-neighbour if QAOA fails
     """
@@ -165,7 +165,7 @@ def get_optimised_route(distance_matrix: np.ndarray) -> list[int]:
     if n <= 1:
         return list(range(n))
 
-    if n <= 8:
+    if n < 8:
         logger.info(f"Using brute force for {n} stops")
         try:
             return brute_force_route(matrix)
@@ -223,8 +223,8 @@ if __name__ == "__main__":
     print(f"\n🟡 Nearest neighbour: {nn_order}")
     print(f"   Total distance:    {nn_dist} km")
 
-    # Quantum optimised
-    print(f"\n⚛️  Running quantum optimisation...")
+    # Qiskit simulation optimised
+    print(f"\n⚛️  Running Qiskit QAOA quantum simulation...")
     start = time.time()
     optimised_order = get_optimised_route(test_matrix)
     elapsed = time.time() - start
@@ -239,5 +239,5 @@ if __name__ == "__main__":
     print(f"\n💰 Fuel saving vs naive:            {saving_vs_naive}%")
     print(f"💰 Fuel saving vs nearest neighbour: {saving_vs_nn}%")
     print("\n" + "=" * 55)
-    print("  QuantaRoute quantum circuit ✅ working!")
+    print("  QuantaRoute Qiskit simulation ✅ working!")
     print("=" * 55)

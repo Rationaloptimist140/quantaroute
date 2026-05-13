@@ -87,10 +87,14 @@ def enforce_usage_limit(request: Request) -> JSONResponse | None:
 class RouteRequest(BaseModel):
     addresses: list[str]
     driver_name: str = "Driver"
+    start_address: str | None = None
+    return_to_start: bool = False
 
 class RouteResponse(BaseModel):
     optimised_order: list[int]
     ordered_addresses: list[str]
+    start_address: str | None = None
+    return_to_start: bool = False
     total_distance_km: float
     naive_distance_km: float
     fuel_saving_percent: float
@@ -122,7 +126,13 @@ def pricing_page():
     return frontend()
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
-async def upload_csv(request: Request, file: UploadFile = File(...), driver_name: str = "Driver"):
+async def upload_csv(
+    request: Request,
+    file: UploadFile = File(...),
+    driver_name: str = "Driver",
+    start_address: str | None = None,
+    return_to_start: bool = False,
+):
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(status_code=400, detail="File must be a .csv")
     contents = await file.read()
@@ -145,7 +155,12 @@ async def upload_csv(request: Request, file: UploadFile = File(...), driver_name
     usage_response = enforce_usage_limit(request)
     if usage_response:
         return usage_response
-    result = await optimise_route(addresses=addresses, driver_name=driver_name)
+    result = await optimise_route(
+        addresses=addresses,
+        driver_name=driver_name,
+        start_address=start_address,
+        return_to_start=return_to_start,
+    )
     record_route_history(driver_name=driver_name, result=result)
     return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
 
@@ -165,7 +180,9 @@ async def route_optimise(route_request: RouteRequest, request: Request):
     try:
         result = await optimise_route(
             addresses=route_request.addresses,
-            driver_name=route_request.driver_name
+            driver_name=route_request.driver_name,
+            start_address=route_request.start_address,
+            return_to_start=route_request.return_to_start,
         )
         record_route_history(driver_name=route_request.driver_name, result=result)
         return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})

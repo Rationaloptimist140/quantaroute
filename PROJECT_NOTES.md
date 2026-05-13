@@ -2,7 +2,7 @@
 
 ## Current Goal
 
-QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The main product message is practical fuel savings: paste or upload stops, reorder them using real road-network distances, show the fuel saving percentage, and provide Google Maps and WhatsApp links before the driver sets off.
+QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The main product message is practical fuel savings: paste or upload stops, optionally set a start address/depot, reorder delivery stops using real road-network distances, show the fuel saving percentage, and provide Google Maps and WhatsApp links before the driver sets off.
 
 Live app: https://quantaroute.onrender.com
 
@@ -17,6 +17,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains supporting technical credibility for selected route sizes, not the headline sales claim.
 - Route output should always emphasise:
   - optimised delivery order
+  - optional start/depot address for Google Maps directions
   - fuel saving percentage
   - total distance
   - direct Google Maps link
@@ -24,6 +25,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Differentiators from the pitch:
   - Qiskit QAOA quantum simulation for 8-20 stops, exact brute force for smaller routes, nearest-neighbour fallback for larger routes.
   - Real road-network distances, not straight-line estimates.
+  - Optional start address/depot and optional return-to-start in Google Maps directions.
   - CSV upload or pasted stops.
   - Works on mobile and desktop browsers.
   - Built in the UK for UK postcode routing.
@@ -50,11 +52,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `requirements.txt` - updated Python 3.14-compatible dependency pins.
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- `backend/main.py` - serves frontend at `/` and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, route history, and free-trial enforcement.
+- `backend/main.py` - serves frontend at `/` and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/database.py` - SQLite route history storage, automatic database initialisation, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
-- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality baseline reporting, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
-- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, pricing banner/card, competitor table, `402` upgrade message, results info line, and collapsible route history.
+- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality baseline reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, and collapsible route history.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
@@ -73,6 +75,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - SQLite `users` table tracks first use, route count, and paying status by IP address.
 - Backend blocks expired free-trial users with HTTP `402` and the frontend shows a friendly upgrade prompt.
 - CSV row numbers, surrounding quote marks, and trailing commas are stripped from displayed stops, API `ordered_addresses`, Google Maps directions links, and WhatsApp share links.
+- Google Maps directions can start from a cleaned start/depot address and optionally append that same start address at the end for round trips. The start address is not displayed as a numbered delivery stop.
 
 ## Remaining Issues
 

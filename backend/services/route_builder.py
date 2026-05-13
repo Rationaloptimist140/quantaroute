@@ -33,13 +33,21 @@ def clean_route_address(address: str) -> str:
     return text.strip(",").strip()
 
 
-def build_google_maps_url(ordered_addresses: list[str]) -> str:
+def build_google_maps_url(
+    ordered_addresses: list[str],
+    start_address: str | None = None,
+    return_to_start: bool = False,
+) -> str:
+    clean_start = clean_route_address(start_address or "")
     clean_addresses = [clean_route_address(addr) for addr in ordered_addresses]
     clean_addresses = [addr for addr in clean_addresses if addr]
-    if not clean_addresses:
+    route_addresses = ([clean_start] if clean_start else []) + clean_addresses
+    if clean_start and return_to_start:
+        route_addresses.append(clean_start)
+    if not route_addresses:
         return ""
     base = "https://www.google.com/maps/dir/"
-    stops = "/".join(urllib.parse.quote(addr) for addr in clean_addresses)
+    stops = "/".join(urllib.parse.quote(addr) for addr in route_addresses)
     return base + stops
 
 
@@ -60,12 +68,18 @@ def describe_route_algorithm(stops_count: int) -> str:
         return "Qiskit QAOA quantum simulation"
     return "nearest-neighbour heuristic"
 
-async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> dict:
+async def optimise_route(
+    addresses: list[str],
+    driver_name: str = "Driver",
+    start_address: str | None = None,
+    return_to_start: bool = False,
+) -> dict:
     """
     Full pipeline: addresses -> optimised route + URLs.
     """
     addresses = [clean_route_address(address) for address in addresses]
     addresses = [address for address in addresses if address]
+    clean_start_address = clean_route_address(start_address or "")
 
     if len(addresses) < 2:
         raise ValueError("Need at least 2 addresses to optimise")
@@ -134,7 +148,11 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     ordered_coords = [valid_coords[i] for i in optimised_order]
     ordered_addresses = [valid_addresses[i] for i in optimised_order]
 
-    maps_url = build_google_maps_url(ordered_addresses)   # ✅ FIXED — addresses not coords
+    maps_url = build_google_maps_url(
+        ordered_addresses,
+        start_address=clean_start_address,
+        return_to_start=return_to_start,
+    )
     whatsapp_url = build_whatsapp_url(maps_url, driver_name)
 
     print(f"  Google Maps URL: {maps_url[:60]}...")
@@ -143,6 +161,8 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     return {
         "optimised_order": optimised_order,
         "ordered_addresses": ordered_addresses,
+        "start_address": clean_start_address or None,
+        "return_to_start": bool(clean_start_address and return_to_start),
         "ordered_coords": ordered_coords,
         "total_distance_km": optimised_dist,
         "naive_distance_km": naive_dist,

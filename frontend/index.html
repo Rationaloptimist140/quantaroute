@@ -258,6 +258,22 @@
       margin: -2px 0 18px;
     }
 
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: -4px 0 16px;
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 500;
+    }
+
+    .check-row input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
     .upload-button {
       min-height: 50px;
       display: inline-flex;
@@ -887,6 +903,16 @@
           </div>
 
           <div class="field">
+            <label for="startAddress">Start address</label>
+            <input id="startAddress" type="text" autocomplete="street-address" placeholder="e.g. Depot, home, or first pickup point" />
+          </div>
+
+          <label class="check-row" for="returnToStart">
+            <input id="returnToStart" type="checkbox" />
+            <span>Return to start</span>
+          </label>
+
+          <div class="field">
             <label for="addresses">Addresses</label>
             <textarea id="addresses" placeholder="Plymouth PL1&#10;Exeter EX1&#10;Bristol BS1"></textarea>
           </div>
@@ -929,6 +955,7 @@
           </p>
 
           <p class="method-info">Powered by Qiskit optimisation for selected route sizes, with practical heuristics for larger route sets.</p>
+          <p class="method-info hidden" id="startNote"></p>
 
           <ol class="stop-list" id="stopList"></ol>
 
@@ -1021,6 +1048,8 @@
 
     const form = document.querySelector("#routeForm");
     const driverName = document.querySelector("#driverName");
+    const startAddress = document.querySelector("#startAddress");
+    const returnToStart = document.querySelector("#returnToStart");
     const addresses = document.querySelector("#addresses");
     const csvFile = document.querySelector("#csvFile");
     const fileStatus = document.querySelector("#fileStatus");
@@ -1031,6 +1060,7 @@
     const resultsState = document.querySelector("#resultsState");
     const fuelSaving = document.querySelector("#fuelSaving");
     const totalDistance = document.querySelector("#totalDistance");
+    const startNote = document.querySelector("#startNote");
     const stopList = document.querySelector("#stopList");
     const mapsButton = document.querySelector("#mapsButton");
     const whatsappButton = document.querySelector("#whatsappButton");
@@ -1119,6 +1149,9 @@
       totalDistance.textContent = `${Number(data.total_distance_km || 0).toFixed(1)} km`;
       mapsButton.href = data.maps_url || "#";
       whatsappButton.href = data.whatsapp_url || "#";
+      const cleanedStartAddress = cleanDisplayedAddress(data.start_address || "");
+      startNote.textContent = cleanedStartAddress ? `Route starts from: ${cleanedStartAddress}` : "";
+      startNote.classList.toggle("hidden", !cleanedStartAddress);
 
       stopList.innerHTML = "";
       (data.ordered_addresses || []).forEach((address, index) => {
@@ -1243,7 +1276,9 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             addresses: stops,
-            driver_name: driverName.value.trim() || "Driver"
+            driver_name: driverName.value.trim() || "Driver",
+            start_address: cleanDisplayedAddress(startAddress.value),
+            return_to_start: returnToStart.checked
           })
         });
 

@@ -487,6 +487,74 @@
       line-height: 1.45;
     }
 
+    .benchmark-panel {
+      margin: -10px 0 24px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #FFFFFF;
+    }
+
+    .benchmark-toggle {
+      width: 100%;
+      min-height: 38px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text);
+      cursor: pointer;
+      font-weight: 700;
+      text-align: left;
+    }
+
+    .benchmark-toggle span:last-child {
+      color: var(--accent);
+      font-size: 0.9rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .benchmark-content {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .benchmark-help {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 0.84rem;
+      line-height: 1.45;
+    }
+
+    .benchmark-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .benchmark-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      color: var(--text);
+      font-size: 0.92rem;
+      font-weight: 600;
+    }
+
+    .benchmark-row span:first-child {
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .benchmark-saving {
+      color: var(--success);
+      font-weight: 700;
+    }
+
     .stop-list {
       display: grid;
       gap: 8px;
@@ -957,6 +1025,35 @@
           <p class="method-info">Powered by Qiskit optimisation for selected route sizes, with practical heuristics for larger route sets.</p>
           <p class="method-info hidden" id="startNote"></p>
 
+          <div class="benchmark-panel hidden" id="benchmarkPanel">
+            <button class="benchmark-toggle" id="benchmarkToggle" type="button" aria-expanded="false" aria-controls="benchmarkContent">
+              <span>Benchmark details</span>
+              <span id="benchmarkToggleText">Show benchmark details</span>
+            </button>
+
+            <div class="benchmark-content hidden" id="benchmarkContent">
+              <p class="benchmark-help">Compared against the stop order you entered.</p>
+              <div class="benchmark-grid">
+                <div class="benchmark-row">
+                  <span>Original order</span>
+                  <strong id="benchmarkOriginal">0 km</strong>
+                </div>
+                <div class="benchmark-row">
+                  <span>Nearest neighbour</span>
+                  <strong id="benchmarkNearest">0 km</strong>
+                </div>
+                <div class="benchmark-row">
+                  <span>Final route</span>
+                  <strong id="benchmarkFinal">0 km</strong>
+                </div>
+                <div class="benchmark-row">
+                  <span>Fuel saved vs original</span>
+                  <strong class="benchmark-saving" id="benchmarkSaving">0%</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <ol class="stop-list" id="stopList"></ol>
 
           <div class="actions">
@@ -1061,6 +1158,14 @@
     const fuelSaving = document.querySelector("#fuelSaving");
     const totalDistance = document.querySelector("#totalDistance");
     const startNote = document.querySelector("#startNote");
+    const benchmarkPanel = document.querySelector("#benchmarkPanel");
+    const benchmarkToggle = document.querySelector("#benchmarkToggle");
+    const benchmarkToggleText = document.querySelector("#benchmarkToggleText");
+    const benchmarkContent = document.querySelector("#benchmarkContent");
+    const benchmarkOriginal = document.querySelector("#benchmarkOriginal");
+    const benchmarkNearest = document.querySelector("#benchmarkNearest");
+    const benchmarkFinal = document.querySelector("#benchmarkFinal");
+    const benchmarkSaving = document.querySelector("#benchmarkSaving");
     const stopList = document.querySelector("#stopList");
     const mapsButton = document.querySelector("#mapsButton");
     const whatsappButton = document.querySelector("#whatsappButton");
@@ -1136,6 +1241,21 @@
       return text.replace(/^,+|,+$/g, "").trim();
     }
 
+    function hasBenchmarkData(data) {
+      return [
+        "original_order_distance_km",
+        "nearest_neighbour_distance_km",
+        "final_selected_distance_km",
+        "fuel_saving_percent_vs_original"
+      ].every((field) => data[field] !== null && data[field] !== undefined && Number.isFinite(Number(data[field])));
+    }
+
+    function setBenchmarkExpanded(isExpanded) {
+      benchmarkToggle.setAttribute("aria-expanded", String(isExpanded));
+      benchmarkContent.classList.toggle("hidden", !isExpanded);
+      benchmarkToggleText.textContent = isExpanded ? "Hide benchmark details" : "Show benchmark details";
+    }
+
     function setLoading(isLoading) {
       submitButton.disabled = isLoading;
       loadingState.classList.toggle("hidden", !isLoading);
@@ -1152,6 +1272,18 @@
       const cleanedStartAddress = cleanDisplayedAddress(data.start_address || "");
       startNote.textContent = cleanedStartAddress ? `Route starts from: ${cleanedStartAddress}` : "";
       startNote.classList.toggle("hidden", !cleanedStartAddress);
+
+      if (hasBenchmarkData(data)) {
+        benchmarkOriginal.textContent = `${Number(data.original_order_distance_km).toFixed(1)} km`;
+        benchmarkNearest.textContent = `${Number(data.nearest_neighbour_distance_km).toFixed(1)} km`;
+        benchmarkFinal.textContent = `${Number(data.final_selected_distance_km).toFixed(1)} km`;
+        benchmarkSaving.textContent = `${Number(data.fuel_saving_percent_vs_original).toFixed(1)}%`;
+        benchmarkPanel.classList.remove("hidden");
+        setBenchmarkExpanded(false);
+      } else {
+        benchmarkPanel.classList.add("hidden");
+        setBenchmarkExpanded(false);
+      }
 
       stopList.innerHTML = "";
       (data.ordered_addresses || []).forEach((address, index) => {
@@ -1310,6 +1442,11 @@
       const expanded = historyToggle.getAttribute("aria-expanded") === "true";
       historyToggle.setAttribute("aria-expanded", String(!expanded));
       historyContent.classList.toggle("hidden", expanded);
+    });
+
+    benchmarkToggle.addEventListener("click", () => {
+      const expanded = benchmarkToggle.getAttribute("aria-expanded") === "true";
+      setBenchmarkExpanded(!expanded);
     });
 
     refreshHistory.addEventListener("click", fetchHistory);

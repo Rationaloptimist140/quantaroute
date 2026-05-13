@@ -21,6 +21,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
   - optimised delivery order
   - optional start/depot address for Google Maps directions
   - fuel saving percentage
+  - optional collapsed benchmark details comparing input order, nearest-neighbour, and final route
   - total distance
   - direct Google Maps link
   - WhatsApp share link
@@ -58,7 +59,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
-- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, and collapsible route history.
+- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, collapsed benchmark details, and collapsible route history.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
@@ -79,6 +80,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - CSV row numbers, surrounding quote marks, and trailing commas are stripped from displayed stops, API `ordered_addresses`, Google Maps directions links, and WhatsApp share links.
 - Google Maps directions can start from a cleaned start/depot address and optionally append that same start address at the end for round trips. The start address is not displayed as a numbered delivery stop.
 - API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
+- Frontend results now show a collapsed "Benchmark details" section when benchmark API fields are available.
 
 ## Remaining Issues
 

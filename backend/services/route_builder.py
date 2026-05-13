@@ -12,7 +12,12 @@ import numpy as np
 
 from geocoder import geocode_addresses
 from road_matrix import build_distance_matrix
-from qaoa import get_optimised_route, calculate_total_distance, estimate_fuel_saving
+from qaoa import (
+    calculate_total_distance,
+    estimate_fuel_saving,
+    get_optimised_route_with_algorithm,
+    nearest_neighbour_route,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +38,14 @@ def build_whatsapp_url(maps_url: str, driver_name: str = "Driver") -> str:
     )
     encoded = urllib.parse.quote(message, safe=":/?=&,+%")
     return f"https://wa.me/?text={encoded}"
+
+
+def describe_route_algorithm(stops_count: int) -> str:
+    if stops_count < 8:
+        return "exact brute force"
+    if stops_count <= 20:
+        return "Qiskit QAOA quantum simulation"
+    return "nearest-neighbour heuristic"
 
 async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> dict:
     """
@@ -68,9 +81,24 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     print(f"\n[3/4] Running route optimisation...")
     naive_order = list(range(len(valid_coords)))
     naive_dist = calculate_total_distance(naive_order, matrix)
+    nn_order = nearest_neighbour_route(matrix)
+    nn_dist = calculate_total_distance(nn_order, matrix)
+    algorithm_name = describe_route_algorithm(len(valid_coords))
 
-    optimised_order = get_optimised_route(matrix)
+    optimised_order, algorithm_used = get_optimised_route_with_algorithm(matrix)
     optimised_dist = calculate_total_distance(optimised_order, matrix)
+    optimiser_dist = optimised_dist
+    optimiser_vs_naive = estimate_fuel_saving(naive_dist, optimiser_dist)
+    optimiser_vs_nn = estimate_fuel_saving(nn_dist, optimiser_dist)
+
+    print(f"  Algorithm selected: {algorithm_name}")
+    print(f"  Algorithm used:     {algorithm_used}")
+    print(f"  Input order distance:       {naive_dist} km")
+    print(f"  Nearest-neighbour distance: {nn_dist} km")
+    print(f"  Optimised/QAOA distance:    {optimiser_dist} km")
+    print(f"  Optimiser vs input order:   {optimiser_vs_naive}%")
+    print(f"  Optimiser vs nearest-neighbour: {optimiser_vs_nn}%")
+
     if optimised_dist > naive_dist:
         logger.warning(
             "Optimised route was longer than naive order (%s km > %s km); using naive order",
@@ -83,9 +111,8 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     else:
         fuel_saving = estimate_fuel_saving(naive_dist, optimised_dist)
 
-    print(f"  Naive distance:     {naive_dist} km")
-    print(f"  Optimised distance: {optimised_dist} km")
-    print(f"  Fuel saving:        {fuel_saving}%")
+    print(f"  Returned route distance:    {optimised_dist} km")
+    print(f"  Returned fuel saving:       {fuel_saving}%")
 
     print(f"\n[4/4] Building delivery URLs...")
     ordered_coords = [valid_coords[i] for i in optimised_order]

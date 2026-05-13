@@ -149,7 +149,7 @@ def qaoa_route(matrix: np.ndarray) -> list[int]:
 # MAIN ENTRY POINT
 # ─────────────────────────────────────────────
 
-def get_optimised_route(distance_matrix: np.ndarray) -> list[int]:
+def get_optimised_route_with_algorithm(distance_matrix: np.ndarray) -> tuple[list[int], str]:
     """
     Main function — returns optimally ordered list of stop indices.
 
@@ -163,28 +163,33 @@ def get_optimised_route(distance_matrix: np.ndarray) -> list[int]:
     n = len(matrix)
 
     if n <= 1:
-        return list(range(n))
+        return list(range(n)), "trivial input order"
 
     if n < 8:
         logger.info(f"Using brute force for {n} stops")
         try:
-            return brute_force_route(matrix)
+            return brute_force_route(matrix), "exact brute force"
         except Exception as e:
             logger.warning(f"Brute force failed: {e}, falling back to nearest neighbour")
-            return nearest_neighbour_route(matrix)
+            return nearest_neighbour_route(matrix), "nearest-neighbour fallback after brute-force failure"
 
     if n <= 20:
         logger.info(f"Using QAOA for {n} stops")
         try:
             route = qaoa_route(matrix)
             logger.info(f"QAOA succeeded: {route}")
-            return route
+            return route, "Qiskit QAOA quantum simulation"
         except Exception as e:
             logger.warning(f"QAOA failed: {e}, falling back to nearest neighbour")
-            return nearest_neighbour_route(matrix)
+            return nearest_neighbour_route(matrix), "nearest-neighbour fallback after QAOA failure"
 
     logger.info(f"Using nearest neighbour for {n} stops (large problem)")
-    return nearest_neighbour_route(matrix)
+    return nearest_neighbour_route(matrix), "nearest-neighbour heuristic"
+
+
+def get_optimised_route(distance_matrix: np.ndarray) -> list[int]:
+    route, _algorithm = get_optimised_route_with_algorithm(distance_matrix)
+    return route
 
 
 # ─────────────────────────────────────────────

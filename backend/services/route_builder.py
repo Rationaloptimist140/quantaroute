@@ -8,6 +8,7 @@ Output: optimised route with Google Maps URL + WhatsApp link
 import asyncio
 import urllib.parse
 import logging
+import re
 import numpy as np
 
 from geocoder import geocode_addresses
@@ -22,11 +23,23 @@ from qaoa import (
 logger = logging.getLogger(__name__)
 
 
+def clean_route_address(address: str) -> str:
+    text = str(address or "").strip()
+    text = re.sub(r"^\ufeff", "", text).strip()
+    text = re.sub(r"^\d+\s*,\s*", "", text).strip()
+    text = text.strip(",").strip()
+    text = re.sub(r"^[\"']+", "", text).strip()
+    text = re.sub(r"[\"']+$", "", text).strip()
+    return text.strip(",").strip()
+
+
 def build_google_maps_url(ordered_addresses: list[str]) -> str:
-    if not ordered_addresses:
+    clean_addresses = [clean_route_address(addr) for addr in ordered_addresses]
+    clean_addresses = [addr for addr in clean_addresses if addr]
+    if not clean_addresses:
         return ""
     base = "https://www.google.com/maps/dir/"
-    stops = "/".join(urllib.parse.quote(addr) for addr in ordered_addresses)
+    stops = "/".join(urllib.parse.quote(addr) for addr in clean_addresses)
     return base + stops
 
 
@@ -51,6 +64,9 @@ async def optimise_route(addresses: list[str], driver_name: str = "Driver") -> d
     """
     Full pipeline: addresses -> optimised route + URLs.
     """
+    addresses = [clean_route_address(address) for address in addresses]
+    addresses = [address for address in addresses if address]
+
     if len(addresses) < 2:
         raise ValueError("Need at least 2 addresses to optimise")
 

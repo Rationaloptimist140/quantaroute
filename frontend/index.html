@@ -844,22 +844,22 @@
       <img class="logo" src="assets/quantaroute-logo.svg" alt="QuantaRoute atom route pin logo" />
       <div>
         <h1 class="brand-title">QuantaRoute</h1>
-        <p class="tagline">Quantum-Inspired Route Optimisation for UK Couriers</p>
+        <p class="tagline">Fuel-Saving Route Optimisation for UK Couriers</p>
       </div>
     </header>
 
     <section class="hero-copy" aria-label="QuantaRoute fuel saving promise">
-      <h2>Save up to <strong>49%</strong> on fuel costs.</h2>
-      <p>Powered by Qiskit quantum simulation. A fraction of the cost of traditional route planners.</p>
+      <h2>Save fuel with smarter route optimisation</h2>
+      <p>Paste your stops, let QuantaRoute reorder them using real road-network distances, and see the fuel saved before you set off. No app download needed.</p>
       <div class="pricing-banner">
         <span>Free for your first month — unlimited routes.</span>
         <small>After your free month: £1.99 per optimised route. No subscription. No monthly fee. Pay only when you use it. Cancel anytime.</small>
       </div>
 
       <div class="proof-strip" aria-label="Product benefits">
-        <div class="proof-pill">⚛️ Powered by Qiskit</div>
-        <div class="proof-pill">💰 Up to 49% Fuel Saved</div>
-        <div class="proof-pill">💷 Fraction of the Cost</div>
+        <div class="proof-pill">Real road distances — not straight-line estimates</div>
+        <div class="proof-pill">Fuel savings shown upfront</div>
+        <div class="proof-pill">No app download — just paste stops or upload CSV</div>
       </div>
 
       <div class="comparison" aria-label="Price comparison">
@@ -899,11 +899,11 @@
             <p class="file-status" id="fileStatus">Paste one stop per line, or upload a CSV with addresses in the first column.</p>
           </div>
 
-          <button class="primary" id="submitButton" type="submit">⚛️ Optimise Route</button>
+          <button class="primary" id="submitButton" type="submit">Optimise Route</button>
 
           <div class="loading hidden" id="loadingState">
             <span class="spinner" aria-hidden="true"></span>
-            <span>Running quantum-inspired optimisation...</span>
+            <span>Running smart route optimisation...</span>
           </div>
 
           <div class="message hidden" id="message" role="alert"></div>
@@ -928,7 +928,7 @@
             <strong id="totalDistance">0 km</strong>
           </p>
 
-          <p class="method-info">Routes with 8–20 stops use Qiskit QAOA quantum simulation. Smaller routes use exact brute-force optimisation.</p>
+          <p class="method-info">Powered by Qiskit optimisation for selected route sizes, with practical heuristics for larger route sets.</p>
 
           <ol class="stop-list" id="stopList"></ol>
 
@@ -975,7 +975,7 @@
               <td>Yes</td>
             </tr>
             <tr>
-              <td>Quantum-inspired optimisation</td>
+              <td>Qiskit-powered optimisation</td>
               <td class="q-col">Yes</td>
               <td>No</td>
               <td>No</td>
@@ -1047,17 +1047,14 @@
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter(Boolean)
-        .map((line) => {
-          const firstCell = line.match(/^"([^"]+)"|^([^,]+)/);
-          return firstCell ? (firstCell[1] || firstCell[2]).trim() : "";
-        })
+        .map((line) => cleanDisplayedAddress(line))
         .filter((value) => value && !["address", "addresses", "stop", "stops"].includes(value.toLowerCase()));
     }
 
     function parseTextarea() {
       return addresses.value
         .split(/\r?\n/)
-        .map((line) => line.trim())
+        .map((line) => cleanDisplayedAddress(line))
         .filter(Boolean);
     }
 
@@ -1093,11 +1090,20 @@
     }
 
     function cleanDisplayedAddress(address) {
-      return String(address || "")
+      let text = String(address || "")
         .trim()
-        .replace(/^\d+\s*,\s*["']?\s*/, "")
-        .replace(/["']?\s*,?\s*$/, "")
+        .replace(/^\uFEFF/, "")
+        .trim()
+        .replace(/^\d+\s*,\s*/, "")
+        .trim()
+        .replace(/^,+|,+$/g, "")
+        .trim()
+        .replace(/^["']+/, "")
+        .trim()
+        .replace(/["']+$/, "")
         .trim();
+
+      return text.replace(/^,+|,+$/g, "").trim();
     }
 
     function setLoading(isLoading) {

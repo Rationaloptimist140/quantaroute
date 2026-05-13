@@ -4,6 +4,8 @@
 
 QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The main product message is practical fuel savings: paste or upload stops, optionally set a start address/depot, reorder delivery stops using real road-network distances, show the fuel saving percentage, and provide Google Maps and WhatsApp links before the driver sets off.
 
+Current internal benchmark mode records route-quality evidence for each successful optimisation: original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus the original order.
+
 Live app: https://quantaroute.onrender.com
 
 GitHub repo: https://github.com/Rationaloptimist140/quantaroute
@@ -53,9 +55,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - `backend/main.py` - serves frontend at `/` and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, optional start/depot request fields, route history, and free-trial enforcement.
-- `backend/database.py` - SQLite route history storage, automatic database initialisation, save/list helpers, and IP-based usage tracking.
+- `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
-- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality baseline reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
 - `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, and collapsible route history.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
@@ -76,12 +78,14 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Backend blocks expired free-trial users with HTTP `402` and the frontend shows a friendly upgrade prompt.
 - CSV row numbers, surrounding quote marks, and trailing commas are stripped from displayed stops, API `ordered_addresses`, Google Maps directions links, and WhatsApp share links.
 - Google Maps directions can start from a cleaned start/depot address and optionally append that same start address at the end for round trips. The start address is not displayed as a numbered delivery stop.
+- API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
 
 ## Remaining Issues
 
 - Route quality depends on public external services: `api.postcodes.io`, Nominatim, and OSRM.
 - Some postcode/outcode results may be approximate, especially terminated or outward-only inputs.
 - Fuel saving percent is based on the current naive route comparison and can be low for already efficient input order.
+- Benchmark distances currently compare the delivery stop order only. The optional start/depot address is included in Google Maps/WhatsApp links but is not geocoded into the benchmark distance matrix.
 - Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
 - Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.

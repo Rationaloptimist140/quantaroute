@@ -98,6 +98,10 @@ class RouteResponse(BaseModel):
     total_distance_km: float
     naive_distance_km: float
     fuel_saving_percent: float
+    original_order_distance_km: float
+    nearest_neighbour_distance_km: float
+    final_selected_distance_km: float
+    fuel_saving_percent_vs_original: float
     maps_url: str
     whatsapp_url: str
     stops_count: int

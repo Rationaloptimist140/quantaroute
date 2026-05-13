@@ -109,37 +109,40 @@ async def optimise_route(
     print(f"  Matrix built: {matrix.shape[0]}x{matrix.shape[1]}")
 
     print(f"\n[3/4] Running route optimisation...")
-    naive_order = list(range(len(valid_coords)))
-    naive_dist = calculate_total_distance(naive_order, matrix)
+    original_order = list(range(len(valid_coords)))
+    original_order_distance = calculate_total_distance(original_order, matrix)
     nn_order = nearest_neighbour_route(matrix)
-    nn_dist = calculate_total_distance(nn_order, matrix)
+    nearest_neighbour_distance = calculate_total_distance(nn_order, matrix)
     algorithm_name = describe_route_algorithm(len(valid_coords))
 
     optimised_order, algorithm_used = get_optimised_route_with_algorithm(matrix)
     optimised_dist = calculate_total_distance(optimised_order, matrix)
     optimiser_dist = optimised_dist
-    optimiser_vs_naive = estimate_fuel_saving(naive_dist, optimiser_dist)
-    optimiser_vs_nn = estimate_fuel_saving(nn_dist, optimiser_dist)
+    optimiser_vs_original = estimate_fuel_saving(original_order_distance, optimiser_dist)
+    optimiser_vs_nn = estimate_fuel_saving(nearest_neighbour_distance, optimiser_dist)
 
     print(f"  Algorithm selected: {algorithm_name}")
     print(f"  Algorithm used:     {algorithm_used}")
-    print(f"  Input order distance:       {naive_dist} km")
-    print(f"  Nearest-neighbour distance: {nn_dist} km")
+    print(f"  Input order distance:       {original_order_distance} km")
+    print(f"  Nearest-neighbour distance: {nearest_neighbour_distance} km")
     print(f"  Optimised/QAOA distance:    {optimiser_dist} km")
-    print(f"  Optimiser vs input order:   {optimiser_vs_naive}%")
+    print(f"  Optimiser vs input order:   {optimiser_vs_original}%")
     print(f"  Optimiser vs nearest-neighbour: {optimiser_vs_nn}%")
 
-    if optimised_dist > naive_dist:
+    if optimised_dist > original_order_distance:
         logger.warning(
             "Optimised route was longer than naive order (%s km > %s km); using naive order",
             optimised_dist,
-            naive_dist,
+            original_order_distance,
         )
-        optimised_order = naive_order
-        optimised_dist = naive_dist
+        optimised_order = original_order
+        optimised_dist = original_order_distance
         fuel_saving = 0.0
     else:
-        fuel_saving = estimate_fuel_saving(naive_dist, optimised_dist)
+        fuel_saving = estimate_fuel_saving(original_order_distance, optimised_dist)
+
+    final_selected_distance = optimised_dist
+    fuel_saving_vs_original = fuel_saving
 
     print(f"  Returned route distance:    {optimised_dist} km")
     print(f"  Returned fuel saving:       {fuel_saving}%")
@@ -165,8 +168,12 @@ async def optimise_route(
         "return_to_start": bool(clean_start_address and return_to_start),
         "ordered_coords": ordered_coords,
         "total_distance_km": optimised_dist,
-        "naive_distance_km": naive_dist,
+        "naive_distance_km": original_order_distance,
         "fuel_saving_percent": fuel_saving,
+        "original_order_distance_km": original_order_distance,
+        "nearest_neighbour_distance_km": nearest_neighbour_distance,
+        "final_selected_distance_km": final_selected_distance,
+        "fuel_saving_percent_vs_original": fuel_saving_vs_original,
         "maps_url": maps_url,
         "whatsapp_url": whatsapp_url,
         "stops_count": len(valid_coords),

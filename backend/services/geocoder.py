@@ -7,21 +7,66 @@ Free OpenStreetMap API — no key needed.
 import asyncio
 import httpx
 import logging
+import re
 
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+POSTCODES_URL = "https://api.postcodes.io/postcodes"
 HEADERS = {"User-Agent": "QuantaRoute/1.0"}
+POSTCODE_RE = re.compile(
+    r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b",
+    re.IGNORECASE,
+)
+
+
+def extract_uk_postcode(address: str) -> str | None:
+    match = POSTCODE_RE.search(address)
+    if not match:
+        return None
+    return re.sub(r"\s+", "", match.group(1).upper())
+
+
+async def geocode_postcode(client: httpx.AsyncClient, postcode: str) -> tuple | None:
+    try:
+        r = await client.get(
+            f"{POSTCODES_URL}/{postcode}",
+            headers=HEADERS,
+            timeout=10.0,
+        )
+        if r.status_code == 404:
+            return None
+        r.raise_for_status()
+        data = r.json()
+        result = data.get("result")
+        if not result:
+            return None
+        return (float(result["latitude"]), float(result["longitude"]))
+    except Exception as e:
+        logger.warning(f"Postcode lookup failed for {postcode}: {e}")
+        return None
 
 
 async def geocode_single(client: httpx.AsyncClient, address: str) -> tuple | None:
     try:
+        postcode = extract_uk_postcode(address)
+        if postcode:
+            coord = await geocode_postcode(client, postcode)
+            if coord:
+                return coord
+
         r = await client.get(
             NOMINATIM_URL,
-            params={"q": address + ", UK", "format": "json", "limit": 1},
+            params={
+                "q": address + ", UK",
+                "format": "json",
+                "limit": 1,
+                "countrycodes": "gb",
+            },
             headers=HEADERS,
             timeout=10.0
         )
+        r.raise_for_status()
         data = r.json()
         if data:
             return (float(data[0]["lat"]), float(data[0]["lon"]))

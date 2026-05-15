@@ -79,112 +79,6 @@
       line-height: 1.35;
     }
 
-    .hero-copy {
-      margin: 0 0 24px;
-      padding: 24px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--card);
-      box-shadow: var(--shadow);
-      animation: rise 560ms ease both;
-    }
-
-    .hero-copy h2 {
-      margin: 0;
-      color: var(--text);
-      font-size: clamp(1.65rem, 8vw, 3rem);
-      font-weight: 700;
-      line-height: 1.02;
-      letter-spacing: 0;
-    }
-
-    .hero-copy h2 strong {
-      color: var(--success);
-    }
-
-    .hero-copy p {
-      margin: 12px 0 0;
-      color: var(--text);
-      font-size: clamp(0.95rem, 3.6vw, 1.08rem);
-      line-height: 1.55;
-    }
-
-    .proof-strip {
-      display: grid;
-      gap: 10px;
-      margin: 14px 0 0;
-    }
-
-    .proof-pill {
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      min-height: 42px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: var(--text);
-      font-weight: 700;
-      line-height: 1.25;
-    }
-
-    .comparison {
-      display: grid;
-      gap: 8px;
-      margin: 14px 0 0;
-    }
-
-    .compare-row {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 12px;
-      align-items: center;
-      min-height: 42px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: var(--muted);
-      font-weight: 500;
-    }
-
-    .compare-row.featured {
-      border: 1px solid var(--accent);
-      background: #F0FDF4;
-      color: var(--text);
-    }
-
-    .compare-price {
-      color: var(--text);
-      font-weight: 700;
-      text-align: right;
-      white-space: nowrap;
-    }
-
-    .compare-row.featured .compare-price {
-      color: var(--success);
-    }
-
-    .pricing-banner {
-      display: grid;
-      gap: 6px;
-      margin: 14px 0 0;
-      padding: 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #F7F8FA;
-      color: var(--text);
-      font-weight: 700;
-      line-height: 1.35;
-    }
-
-    .pricing-banner small {
-      color: var(--muted);
-      font-size: 0.86rem;
-      font-weight: 500;
-    }
-
     .card {
       position: relative;
       margin-bottom: 24px;
@@ -637,181 +531,6 @@
       margin-top: 4px;
     }
 
-    .pricing-card {
-      margin-top: 4px;
-    }
-
-    .dashboard-section {
-      margin: 0 0 24px;
-    }
-
-    .section-title {
-      margin: 0 0 10px;
-      font-size: clamp(1.45rem, 6vw, 2.2rem);
-      font-weight: 700;
-      line-height: 1.05;
-      color: var(--text);
-    }
-
-    .section-lead {
-      margin: 0 0 14px;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .info-grid {
-      display: grid;
-      gap: 12px;
-    }
-
-    .info-card {
-      padding: 24px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: #FFFFFF;
-      box-shadow: var(--shadow);
-    }
-
-    .info-card h3 {
-      margin: 0 0 8px;
-      color: var(--text);
-      font-size: 1.04rem;
-      font-weight: 700;
-      line-height: 1.25;
-    }
-
-    .info-card p {
-      margin: 0;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .info-list,
-    .scenario-list {
-      display: grid;
-      gap: 9px;
-      margin: 12px 0 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .info-list li,
-    .scenario-list li {
-      color: var(--text);
-      line-height: 1.45;
-    }
-
-    .scenario-card {
-      margin-top: 12px;
-      border-color: rgba(26, 107, 60, 0.28);
-      background: #F0FDF4;
-    }
-
-    .scenario-saving {
-      margin-top: 12px;
-      color: var(--success);
-      font-size: 1.05rem;
-      font-weight: 700;
-    }
-
-    .proof-metrics {
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
-    }
-
-    .proof-metric {
-      display: flex;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: var(--muted);
-      font-weight: 500;
-    }
-
-    .proof-metric strong {
-      color: var(--text);
-      text-align: right;
-    }
-
-    .proof-metric .saving {
-      color: var(--success);
-    }
-
-    .pricing-lead {
-      margin: 0 0 14px;
-      color: var(--muted);
-      line-height: 1.55;
-    }
-
-    .pricing-list {
-      display: grid;
-      gap: 9px;
-      margin: 0 0 18px;
-      padding: 0;
-      list-style: none;
-    }
-
-    .pricing-list li {
-      padding: 11px 12px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #FFFFFF;
-      color: var(--text);
-      font-weight: 500;
-      line-height: 1.4;
-    }
-
-    .pricing-table-wrap {
-      overflow-x: auto;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #FFFFFF;
-    }
-
-    .pricing-table {
-      width: 100%;
-      min-width: 760px;
-      border-collapse: collapse;
-      color: var(--text);
-      font-size: 0.92rem;
-    }
-
-    .pricing-table th,
-    .pricing-table td {
-      padding: 13px 12px;
-      border-bottom: 1px solid var(--line);
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    .pricing-table th:first-child,
-    .pricing-table td:first-child {
-      color: var(--muted);
-      font-weight: 500;
-      text-align: left;
-    }
-
-    .pricing-table tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .pricing-table .q-col {
-      color: var(--accent);
-      background: #F0FDF4;
-      font-weight: 700;
-    }
-
-    .payment-note {
-      margin: 14px 0 0;
-      color: var(--muted);
-      line-height: 1.5;
-      font-size: 0.92rem;
-    }
-
     .history-header {
       display: flex;
       align-items: center;
@@ -928,6 +647,23 @@
       color: var(--success);
     }
 
+    .footer-link {
+      margin: 2px 0 0;
+      padding: 0 0 18px;
+      text-align: center;
+    }
+
+    .footer-link a {
+      color: var(--muted);
+      font-size: 0.92rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .footer-link a:hover {
+      color: var(--accent);
+    }
+
     @keyframes spin {
       to {
         transform: rotate(360deg);
@@ -964,29 +700,6 @@
       .hero {
         justify-content: center;
         text-align: left;
-      }
-
-      .hero-copy {
-        padding: 24px;
-      }
-
-      .proof-strip {
-        grid-template-columns: repeat(3, 1fr);
-      }
-
-      .info-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-
-      .scenario-grid {
-        grid-template-columns: 1.1fr 0.9fr;
-      }
-
-      .desktop-grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(340px, 0.86fr);
-        gap: 24px;
-        align-items: start;
       }
 
       .card {
@@ -1031,112 +744,6 @@
         <p class="tagline">Built for couriers and multi-drop drivers</p>
       </div>
     </header>
-
-    <section class="hero-copy" aria-label="QuantaRoute fuel saving promise">
-      <h2>Paste your stops, get the best route, and see the fuel saved</h2>
-      <p>QuantaRoute helps individual couriers and small delivery operators turn a messy multi-drop list into a cleaner Google Maps route. No app to install. Works in WhatsApp, on mobile, and in the browser.</p>
-      <div class="pricing-banner">
-        <span>Free for your first month — unlimited routes.</span>
-        <small>After your free month: £1.99 per optimised route. No subscription. No monthly fee. Pay only when you use it. Cancel anytime.</small>
-      </div>
-
-      <div class="proof-strip" aria-label="Product benefits">
-        <div class="proof-pill">Built for couriers and multi-drop drivers</div>
-        <div class="proof-pill">Fuel savings and benchmark proof shown upfront</div>
-        <div class="proof-pill">No app download — paste stops or upload CSV</div>
-      </div>
-
-      <div class="comparison" aria-label="Price comparison">
-        <div class="compare-row featured">
-          <span>QuantaRoute</span>
-          <span class="compare-price">Route optimisation with proof</span>
-        </div>
-        <div class="compare-row">
-          <span>Routific</span>
-          <span class="compare-price">Fleet planning SaaS</span>
-        </div>
-        <div class="compare-row">
-          <span>OptimoRoute</span>
-          <span class="compare-price">Driver/month plans</span>
-        </div>
-      </div>
-    </section>
-
-    <section class="dashboard-section" aria-labelledby="howTitle">
-      <h2 class="section-title" id="howTitle">How it works for couriers</h2>
-      <p class="section-lead">It is built for the everyday multi-drop job: paste the stops once, compare route options, then send the chosen route to Google Maps or WhatsApp.</p>
-
-      <div class="info-grid" aria-label="How QuantaRoute works">
-        <article class="info-card">
-          <h3>Start with your real stops</h3>
-          <p>Paste addresses or upload a CSV, add your depot or home start point, and choose whether you need to return to start.</p>
-        </article>
-        <article class="info-card">
-          <h3>Compare better route candidates</h3>
-          <p>Most simple planners lean on greedy nearest-neighbour choices. They are fast, but can pick the next closest stop and miss a better overall route.</p>
-        </article>
-        <article class="info-card">
-          <h3>Return the safe final route</h3>
-          <p>QuantaRoute compares the original order, nearest-neighbour, and a QAOA or final selected route where appropriate. It only returns the final route when it is not worse than the baseline.</p>
-        </article>
-      </div>
-
-      <div class="info-grid scenario-grid">
-        <article class="info-card scenario-card">
-          <h3>Courier scenario: Plymouth multi-drop route</h3>
-          <ul class="scenario-list">
-            <li>You start in Plymouth with 20 stops.</li>
-            <li>You paste the addresses once.</li>
-            <li>QuantaRoute orders them using road-based route optimisation.</li>
-            <li>You open the route in Google Maps and share it by WhatsApp if needed.</li>
-          </ul>
-          <div class="scenario-saving">Example: 13.4% fuel saved vs original order.</div>
-        </article>
-
-        <article class="info-card">
-          <h3>Benchmark proof</h3>
-          <p>Benchmark details show whether the result improved on the stop order you entered.</p>
-          <div class="proof-metrics" aria-label="Example benchmark distances">
-            <div class="proof-metric">
-              <span>Original order</span>
-              <strong>220.0 km</strong>
-            </div>
-            <div class="proof-metric">
-              <span>Nearest neighbour</span>
-              <strong>204.6 km</strong>
-            </div>
-            <div class="proof-metric">
-              <span>Final route</span>
-              <strong>190.5 km</strong>
-            </div>
-            <div class="proof-metric">
-              <span>Fuel saved vs original</span>
-              <strong class="saving">13.4%</strong>
-            </div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <section class="dashboard-section" aria-labelledby="compareTitle">
-      <h2 class="section-title" id="compareTitle">QuantaRoute vs simpler route planners</h2>
-      <p class="section-lead">Navigation apps are great for following a route. QuantaRoute is focused on choosing the route order first, showing the fuel saving, and giving couriers proof before they set off.</p>
-
-      <div class="info-grid" aria-label="QuantaRoute differences">
-        <article class="info-card">
-          <h3>Optimisation, not just navigation</h3>
-          <p>It compares multiple route candidates before handing the result to Google Maps, instead of only guiding you from one stop to the next.</p>
-        </article>
-        <article class="info-card">
-          <h3>Courier-friendly sharing</h3>
-          <p>Start address, return-to-start, and WhatsApp sharing are built into the flow, so it fits how solo drivers already work.</p>
-        </article>
-        <article class="info-card">
-          <h3>Lower-cost for small users</h3>
-          <p>It is designed for individual couriers and small operators who do not need expensive full fleet software.</p>
-        </article>
-      </div>
-    </section>
 
     <main class="desktop-grid">
       <section class="card" aria-labelledby="planner-title">
@@ -1240,77 +847,6 @@
       </section>
     </main>
 
-    <section class="card pricing-card" id="pricing" aria-labelledby="pricingTitle">
-      <h2 class="section-title" id="pricingTitle">Simple Pricing</h2>
-      <p class="pricing-lead">Built for drivers and small delivery operators who want smarter routes, visible fuel savings, and no expensive monthly software.</p>
-
-      <ul class="pricing-list">
-        <li>Free for your first month — unlimited routes.</li>
-        <li>After your free month: £1.99 per optimised route.</li>
-        <li>No subscription. No monthly fee. Pay only when you use it.</li>
-        <li>Cancel anytime.</li>
-      </ul>
-
-      <div class="pricing-table-wrap" aria-label="Competitor comparison">
-        <table class="pricing-table">
-          <thead>
-            <tr>
-              <th scope="col"></th>
-              <th scope="col" class="q-col">QuantaRoute</th>
-              <th scope="col">Routific</th>
-              <th scope="col">OptimoRoute</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Price</td>
-              <td class="q-col">£1.99/route</td>
-              <td>£150+/month</td>
-              <td>£39+/driver/month</td>
-            </tr>
-            <tr>
-              <td>App required</td>
-              <td class="q-col">No</td>
-              <td>Yes</td>
-              <td>Yes</td>
-            </tr>
-            <tr>
-              <td>Route optimisation focus</td>
-              <td class="q-col">Built around stop reordering</td>
-              <td>Fleet planning SaaS</td>
-              <td>Driver route planning</td>
-            </tr>
-            <tr>
-              <td>Benchmark proof</td>
-              <td class="q-col">Original vs nearest-neighbour vs final</td>
-              <td>Not the core message</td>
-              <td>Not the core message</td>
-            </tr>
-            <tr>
-              <td>Start and return-to-start</td>
-              <td class="q-col">Yes</td>
-              <td>Varies by setup</td>
-              <td>Varies by setup</td>
-            </tr>
-            <tr>
-              <td>WhatsApp sharing</td>
-              <td class="q-col">Yes</td>
-              <td>Manual/share options vary</td>
-              <td>Manual/share options vary</td>
-            </tr>
-            <tr>
-              <td>Free trial</td>
-              <td class="q-col">1 month free</td>
-              <td>Limited</td>
-              <td>Limited</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="payment-note">Currently in beta: QuantaRoute is free to test during the beta period. Stripe checkout is being added soon. After launch, pricing will be £1.99 per optimised route.</p>
-    </section>
-
     <section class="card history-card" aria-labelledby="historyTitle">
       <button class="history-toggle" id="historyToggle" type="button" aria-expanded="false" aria-controls="historyContent">
         <span id="historyTitle">Route History</span>
@@ -1325,6 +861,10 @@
         <div class="history-list" id="historyList"></div>
       </div>
     </section>
+
+    <footer class="footer-link">
+      <a href="landing.html">About QuantaRoute</a>
+    </footer>
   </div>
 
   <script>
@@ -1640,9 +1180,6 @@
     refreshHistory.addEventListener("click", fetchHistory);
     fetchHistory();
 
-    if (window.location.pathname === "/pricing") {
-      document.querySelector("#pricing")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
   </script>
 </body>
 </html>

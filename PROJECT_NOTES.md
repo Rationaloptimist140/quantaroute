@@ -6,7 +6,7 @@ QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The m
 
 Current internal benchmark mode records route-quality evidence for each successful optimisation: original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus the original order.
 
-The frontend dashboard now speaks first to individual couriers and multi-drop drivers, with a plain-English explanation of how QuantaRoute compares route candidates before returning a safe final route.
+The working app and marketing page are now separated: `frontend/index.html` is the fast route-optimiser tool, while `frontend/landing.html` holds the courier-first explainer, pricing, and comparison copy.
 
 Live app: https://quantaroute.onrender.com
 
@@ -19,7 +19,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Built for UK couriers and delivery drivers.
 - Browser-first: no app download, no installation, no account setup required for the basic route flow.
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains supporting technical credibility for selected route sizes, not the headline sales claim.
-- Dashboard copy should stay practical and courier-first: paste stops, get a better route, see the fuel saved, open in Google Maps, and share by WhatsApp.
+- The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
   - optional start/depot address for Google Maps directions
@@ -58,11 +58,12 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `requirements.txt` - updated Python 3.14-compatible dependency pins.
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- `backend/main.py` - serves frontend at `/` and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, optional start/depot request fields, route history, and free-trial enforcement.
+- `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
-- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, courier-first fuel-saving messaging, how-it-works/QAOA explainer, courier scenario, comparison sections, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, collapsed benchmark details, and collapsible route history.
+- `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, CSV upload, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and a subtle `About QuantaRoute` link.
+- `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works/QAOA explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, and a `Try QuantaRoute free` link back to the app.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.

@@ -112,22 +112,31 @@ class RouteResponse(BaseModel):
 def health():
     return {"status": "ok", "service": "QuantaRoute API", "version": "1.0.0"}
 
-@app.get("/", include_in_schema=False)
-def frontend():
-    index_path = FRONTEND_DIR / "index.html"
-    if not index_path.exists():
+def frontend_file(filename: str) -> FileResponse:
+    file_path = FRONTEND_DIR / filename
+    if not file_path.exists():
         raise HTTPException(status_code=404, detail="Frontend not found")
     return FileResponse(
-        index_path,
+        file_path,
         headers={
             "Cache-Control": "no-store, max-age=0",
             "Pragma": "no-cache",
         },
     )
 
+@app.get("/", include_in_schema=False)
+@app.get("/index.html", include_in_schema=False)
+def frontend():
+    return frontend_file("index.html")
+
+@app.get("/landing", include_in_schema=False)
+@app.get("/landing.html", include_in_schema=False)
+def landing_page():
+    return frontend_file("landing.html")
+
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
-    return frontend()
+    return frontend_file("landing.html")
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(

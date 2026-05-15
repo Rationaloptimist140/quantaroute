@@ -6,6 +6,8 @@ QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The m
 
 Current internal benchmark mode records route-quality evidence for each successful optimisation: original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus the original order.
 
+The frontend dashboard now speaks first to individual couriers and multi-drop drivers, with a plain-English explanation of how QuantaRoute compares route candidates before returning a safe final route.
+
 Live app: https://quantaroute.onrender.com
 
 GitHub repo: https://github.com/Rationaloptimist140/quantaroute
@@ -17,6 +19,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Built for UK couriers and delivery drivers.
 - Browser-first: no app download, no installation, no account setup required for the basic route flow.
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains supporting technical credibility for selected route sizes, not the headline sales claim.
+- Dashboard copy should stay practical and courier-first: paste stops, get a better route, see the fuel saved, open in Google Maps, and share by WhatsApp.
 - Route output should always emphasise:
   - optimised delivery order
   - optional start/depot address for Google Maps directions
@@ -59,7 +62,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
-- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, fuel-saving road-based messaging, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, collapsed benchmark details, and collapsible route history.
+- `frontend/index.html` - complete mobile-first Premium White frontend, live Render API URL, courier-first fuel-saving messaging, how-it-works/QAOA explainer, courier scenario, comparison sections, start address and return-to-start inputs, pricing banner/card, competitor table, `402` upgrade message, results info line, collapsed benchmark details, and collapsible route history.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.

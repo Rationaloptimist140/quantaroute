@@ -6,6 +6,7 @@ import sys
 import os
 import csv
 import io
+import re
 from pathlib import Path
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -18,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 import logging
 
-from services.route_builder import optimise_route
+from services.route_builder import clean_route_address, optimise_route
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -83,6 +84,165 @@ def enforce_usage_limit(request: Request) -> JSONResponse | None:
             "upgrade_url": UPGRADE_URL,
         },
     )
+
+def is_csv_header_row(cells: list[str]) -> bool:
+    headers = {
+        "stop",
+        "stop number",
+        "business",
+        "business name",
+        "company",
+        "customer",
+        "name",
+        "address",
+        "addresses",
+        "postcode",
+        "post code",
+        "order",
+        "order details",
+        "notes",
+    }
+    return any(cell.strip().lower() in headers for cell in cells)
+
+
+def is_postcode_only(value: str) -> bool:
+    compact = value.strip().upper()
+    return bool(
+        re.fullmatch(r"[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}", compact)
+        or re.fullmatch(r"[A-Z]{1,2}\d[A-Z\d]?", compact)
+    )
+
+
+def is_ignored_csv_cell(value: str) -> bool:
+    text = value.strip()
+    if not text or text.isdigit() or is_postcode_only(text):
+        return True
+    return text.lower() in {
+        "stop",
+        "stop number",
+        "address",
+        "addresses",
+        "postcode",
+        "post code",
+        "order",
+        "order details",
+        "notes",
+        "qty",
+        "quantity",
+        "item",
+        "items",
+    }
+
+
+def looks_address_like_cell(value: str) -> bool:
+    return bool(
+        re.search(
+            r"\d|,|\b(road|rd|street|st|lane|ln|avenue|ave|drive|dr|way|close|cl|place|pl|plymouth|exeter|bristol)\b",
+            value,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
+def get_csv_header_map(rows: list[list[str]]) -> dict[str, int | bool]:
+    first_row = [clean_route_address(cell).lower() for cell in (rows[0] if rows else [])]
+    if not is_csv_header_row(first_row):
+        return {"has_header": False, "business_index": -1, "address_index": -1}
+
+    business_index = next(
+        (
+            index
+            for index, header in enumerate(first_row)
+            if re.search(r"business|company|customer|client|venue|name", header)
+            and not re.search(r"address|order", header)
+        ),
+        -1,
+    )
+    address_index = next(
+        (
+            index
+            for index, header in enumerate(first_row)
+            if re.search(r"address|addr|street|line 1|line1", header)
+            and "email" not in header
+        ),
+        -1,
+    )
+    return {
+        "has_header": True,
+        "business_index": business_index,
+        "address_index": address_index,
+    }
+
+
+def combine_business_and_address(business_name: str, address_text: str) -> str:
+    business = clean_route_address(business_name)
+    address = clean_route_address(address_text)
+    if not address:
+        return ""
+    if not business or is_ignored_csv_cell(business):
+        return address
+    if address.lower().startswith(business.lower()):
+        return address
+    return f"{business}, {address}"
+
+
+def first_address_like_cell(cells: list[str]) -> str:
+    for cell in cells:
+        if is_ignored_csv_cell(cell):
+            continue
+        if looks_address_like_cell(cell):
+            return cell
+    return ""
+
+
+def extract_csv_address(
+    row: list[str],
+    header_map: dict[str, int | bool],
+    row_index: int,
+) -> str:
+    cells = [clean_route_address(cell) for cell in row]
+    if not any(cells) or (row_index == 0 and header_map["has_header"]):
+        return ""
+
+    if len(cells) == 1:
+        return cells[0]
+
+    address_index = int(header_map["address_index"])
+    business_index = int(header_map["business_index"])
+    if address_index >= 0:
+        business = cells[business_index] if business_index >= 0 else ""
+        address = cells[address_index] if address_index < len(cells) else ""
+        return combine_business_and_address(business, address)
+
+    if (
+        len(cells) >= 3
+        and not is_ignored_csv_cell(cells[2])
+        and (is_ignored_csv_cell(cells[0]) or looks_address_like_cell(cells[2]))
+    ):
+        return combine_business_and_address(cells[1], cells[2])
+
+    if (
+        len(cells) >= 2
+        and not is_ignored_csv_cell(cells[1])
+        and (is_ignored_csv_cell(cells[0]) or looks_address_like_cell(cells[1]))
+    ):
+        business = "" if is_ignored_csv_cell(cells[0]) else cells[0]
+        return combine_business_and_address(business, cells[1])
+
+    return clean_route_address(
+        first_address_like_cell(cells)
+        or next((cell for cell in cells if not is_ignored_csv_cell(cell)), "")
+    )
+
+
+def parse_csv_addresses(decoded_csv: str) -> list[str]:
+    rows = list(csv.reader(io.StringIO(decoded_csv)))
+    header_map = get_csv_header_map(rows)
+    return [
+        address
+        for index, row in enumerate(rows)
+        if (address := extract_csv_address(row, header_map, index))
+    ]
 
 class RouteRequest(BaseModel):
     addresses: list[str]
@@ -150,17 +310,7 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="File must be a .csv")
     contents = await file.read()
     decoded = contents.decode("utf-8-sig")
-    reader = csv.reader(io.StringIO(decoded))
-    addresses = []
-    for row in reader:
-        if not row:
-            continue
-        first = row[0].strip()
-        if not first:
-            continue
-        if first.lower() in {"address", "addresses", "stop", "stops"}:
-            continue
-        addresses.append(first)
+    addresses = parse_csv_addresses(decoded)
     if len(addresses) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 addresses in CSV")
     if len(addresses) > 50:

@@ -24,10 +24,17 @@ from services.route_builder import clean_route_address, optimise_route
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+CONTACT_EMAIL = "hi@quantaroute.co.uk"
+SUPPORT_EMAIL = "hi@quantaroute.co.uk"
+
 app = FastAPI(
     title="QuantaRoute API",
     description="Qiskit-powered quantum-inspired delivery route optimisation for UK couriers",
-    version="1.0.0"
+    version="1.0.0",
+    contact={
+        "name": "QuantaRoute",
+        "email": CONTACT_EMAIL,
+    },
 )
 
 app.add_middleware(

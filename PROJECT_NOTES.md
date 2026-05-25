@@ -63,7 +63,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
-- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `backend/services/road_matrix.py` - OSRM/Haversine distance matrix builder with coordinate validation and fallback handling for incomplete OSRM responses.
 - `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, multi-column CSV upload cleanup, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and subtle `About QuantaRoute`/contact links.
 - `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works/QAOA explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, contact email, and a `Try QuantaRoute free` link back to the app.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
@@ -79,6 +80,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Frontend cached old `localhost:8000` text; page is served with `Cache-Control: no-store`.
 - Postcode-only requests could fail with `Need at least 2 geocoded addresses`; geocoder now supports active, terminated, and outward UK postcodes.
 - Backend now returns friendlier `400` errors for geocoding validation failures instead of generic `500`.
+- Failed or malformed geocoder results are now filtered before distance-matrix work, avoiding `NoneType` crashes when an address cannot be geocoded.
+- OSRM `distances: null` or incomplete distance matrices now fall back to Haversine instead of crashing.
 - SQLite route history now initialises automatically and saves each successful JSON or CSV route optimisation.
 - `GET /routes/history` returns the last 50 saved routes.
 - SQLite `users` table tracks first use, route count, and paying status by IP address.

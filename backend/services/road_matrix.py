@@ -7,10 +7,24 @@ No API key needed. Uses public OSRM server.
 import httpx
 import numpy as np
 import logging
+import math
 
 logger = logging.getLogger(__name__)
 
 OSRM_URL = "http://router.project-osrm.org/table/v1/driving"
+
+
+def is_valid_coordinate(coord: tuple | None) -> bool:
+    if coord is None:
+        return False
+    try:
+        if len(coord) != 2:
+            return False
+        lat = float(coord[0])
+        lng = float(coord[1])
+    except (TypeError, ValueError, IndexError):
+        return False
+    return math.isfinite(lat) and math.isfinite(lng)
 
 
 def build_distance_matrix(coordinates: list[tuple]) -> np.ndarray:
@@ -22,15 +36,15 @@ def build_distance_matrix(coordinates: list[tuple]) -> np.ndarray:
     if not coordinates:
         return np.array([])
 
-    # Filter out None coordinates
-    valid_coords = [(i, c) for i, c in enumerate(coordinates) if c is not None]
+    # Filter out failed or malformed geocodes before OSRM receives them.
+    valid_coords = [(i, c) for i, c in enumerate(coordinates) if is_valid_coordinate(c)]
     n = len(valid_coords)
 
     if n < 2:
         raise ValueError("Need at least 2 valid coordinates")
 
     # Format: lng,lat;lng,lat (OSRM uses lng first)
-    coords_str = ";".join(f"{lng},{lat}" for _, (lat, lng) in valid_coords)
+    coords_str = ";".join(f"{float(lng)},{float(lat)}" for _, (lat, lng) in valid_coords)
     url = f"{OSRM_URL}/{coords_str}"
 
     try:
@@ -43,8 +57,12 @@ def build_distance_matrix(coordinates: list[tuple]) -> np.ndarray:
             raise ValueError(f"OSRM error: {data.get('code')}")
 
         # Extract distance matrix (in metres) → convert to km
-        durations = data["distances"]
+        durations = data.get("distances")
+        if not durations or len(durations) != n or any(row is None or len(row) != n for row in durations):
+            raise ValueError("OSRM returned an incomplete distance matrix")
         matrix = np.array(durations, dtype=float) / 1000.0
+        if matrix.shape != (n, n) or not np.isfinite(matrix).all():
+            raise ValueError("OSRM returned invalid distance values")
 
         # Set diagonal to 0 (distance from point to itself)
         np.fill_diagonal(matrix, 0.0)

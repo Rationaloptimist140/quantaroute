@@ -12,7 +12,7 @@ import re
 import numpy as np
 
 from geocoder import geocode_addresses
-from road_matrix import build_distance_matrix
+from road_matrix import build_distance_matrix, is_valid_coordinate
 from qaoa import (
     calculate_total_distance,
     estimate_fuel_saving,
@@ -87,11 +87,11 @@ async def optimise_route(
     print(f"\n[1/4] Geocoding {len(addresses)} addresses...")
     coords = await geocode_addresses(addresses)
 
-    failed = [addresses[i] for i, c in enumerate(coords) if c is None]
+    failed = [addresses[i] for i, c in enumerate(coords) if not is_valid_coordinate(c)]
     if failed:
         print(f"  Warning: Could not geocode: {failed}")
 
-    valid_indices = [i for i, c in enumerate(coords) if c is not None]
+    valid_indices = [i for i, c in enumerate(coords) if is_valid_coordinate(c)]
     valid_coords = [coords[i] for i in valid_indices]
     valid_addresses = [addresses[i] for i in valid_indices]
 

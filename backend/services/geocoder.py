@@ -88,20 +88,25 @@ async def geocode_outcode(client: httpx.AsyncClient, outcode: str) -> tuple | No
         return None
 
 
-async def geocode_single(client: httpx.AsyncClient, address: str) -> tuple | None:
+async def geocode_single_with_source(
+    client: httpx.AsyncClient,
+    address: str,
+) -> tuple[tuple | None, bool]:
+    used_nominatim = False
     try:
         postcode = extract_uk_postcode(address)
         if postcode:
             coord = await geocode_postcode(client, postcode)
             if coord:
-                return coord
+                return coord, used_nominatim
         else:
             outcode = extract_uk_outcode(address)
             if outcode:
                 coord = await geocode_outcode(client, outcode)
                 if coord:
-                    return coord
+                    return coord, used_nominatim
 
+        used_nominatim = True
         r = await client.get(
             NOMINATIM_URL,
             params={
@@ -116,12 +121,17 @@ async def geocode_single(client: httpx.AsyncClient, address: str) -> tuple | Non
         r.raise_for_status()
         data = r.json()
         if data:
-            return (float(data[0]["lat"]), float(data[0]["lon"]))
+            return (float(data[0]["lat"]), float(data[0]["lon"])), used_nominatim
         logger.warning(f"No result for: {address}")
-        return None
+        return None, used_nominatim
     except Exception as e:
         logger.error(f"Geocode failed for {address}: {e}")
-        return None
+        return None, used_nominatim
+
+
+async def geocode_single(client: httpx.AsyncClient, address: str) -> tuple | None:
+    coord, _used_nominatim = await geocode_single_with_source(client, address)
+    return coord
 
 
 async def geocode_addresses(addresses: list[str]) -> list[tuple | None]:
@@ -132,10 +142,10 @@ async def geocode_addresses(addresses: list[str]) -> list[tuple | None]:
     results = []
     async with httpx.AsyncClient() as client:
         for i, address in enumerate(addresses):
-            coord = await geocode_single(client, address)
+            coord, used_nominatim = await geocode_single_with_source(client, address)
             results.append(coord)
             logger.info(f"Geocoded {i+1}/{len(addresses)}: {address} -> {coord}")
-            if i < len(addresses) - 1:
+            if used_nominatim and i < len(addresses) - 1:
                 await asyncio.sleep(1)  # Nominatim rate limit
     return results
 

@@ -29,7 +29,7 @@ SUPPORT_EMAIL = "hi@quantaroute.co.uk"
 
 app = FastAPI(
     title="QuantaRoute API",
-    description="Qiskit-powered quantum-inspired delivery route optimisation for UK couriers",
+    description="Road-network delivery route optimisation for UK couriers",
     version="1.0.0",
     contact={
         "name": "QuantaRoute",

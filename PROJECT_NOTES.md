@@ -20,7 +20,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 
 - Built for UK couriers and delivery drivers.
 - Browser-first: no app download, no installation, no account setup required for the basic route flow.
-- Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains supporting technical credibility for selected route sizes, not the headline sales claim.
+- Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains an experimental/internal optimisation module, not the live route-selection promise.
 - The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
@@ -31,7 +31,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
   - direct Google Maps link
   - WhatsApp share link
 - Differentiators from the pitch:
-  - Qiskit QAOA quantum simulation for 8-20 stops, exact brute force for smaller routes, nearest-neighbour fallback for larger routes.
+  - Live route selection uses exact brute force for small routes and nearest-neighbour heuristics for larger routes to keep Render/free-tier requests responsive.
+  - Qiskit QAOA simulation remains in the codebase for internal experimentation, but is not used as the live default after stress testing showed larger QAOA jobs can exceed request limits.
   - Real road-network distances, not straight-line estimates.
   - Optional start address/depot and optional return-to-start in Google Maps directions.
   - CSV upload or pasted stops.
@@ -60,13 +61,13 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `requirements.txt` - updated Python 3.14-compatible dependency pins.
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, optional start/depot request fields, route history, and free-trial enforcement.
+- `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
-- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
 - `backend/services/road_matrix.py` - OSRM/Haversine distance matrix builder with coordinate validation and fallback handling for incomplete OSRM responses.
 - `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, multi-column CSV upload cleanup, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and subtle `About QuantaRoute`/contact links.
-- `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works/QAOA explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, contact email, and a `Try QuantaRoute free` link back to the app.
+- `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works route-selection explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, contact email, and a `Try QuantaRoute free` link back to the app.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
@@ -82,6 +83,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Backend now returns friendlier `400` errors for geocoding validation failures instead of generic `500`.
 - Failed or malformed geocoder results are now filtered before distance-matrix work, avoiding `NoneType` crashes when an address cannot be geocoded.
 - OSRM `distances: null` or incomplete distance matrices now fall back to Haversine instead of crashing.
+- Live route selection no longer enters QAOA for 8-20 stop jobs; stress testing showed larger QAOA simulation could exceed request timeouts or lock a free-tier worker.
 - SQLite route history now initialises automatically and saves each successful JSON or CSV route optimisation.
 - `GET /routes/history` returns the last 50 saved routes.
 - SQLite `users` table tracks first use, route count, and paying status by IP address.

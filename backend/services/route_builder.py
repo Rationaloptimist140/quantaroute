@@ -1,6 +1,6 @@
 """
 QuantaRoute — Route Builder
-Chains geocoder + road matrix + QAOA into one complete pipeline.
+Chains geocoder + road matrix + route selection into one complete pipeline.
 Input: list of address strings
 Output: optimised route with Google Maps URL + WhatsApp link
 """
@@ -13,12 +13,7 @@ import numpy as np
 
 from geocoder import geocode_addresses
 from road_matrix import build_distance_matrix, is_valid_coordinate
-from qaoa import (
-    calculate_total_distance,
-    estimate_fuel_saving,
-    get_optimised_route_with_algorithm,
-    nearest_neighbour_route,
-)
+from qaoa import calculate_total_distance, estimate_fuel_saving, nearest_neighbour_route
 
 logger = logging.getLogger(__name__)
 
@@ -64,9 +59,19 @@ def build_whatsapp_url(maps_url: str, driver_name: str = "Driver") -> str:
 def describe_route_algorithm(stops_count: int) -> str:
     if stops_count < 8:
         return "exact brute force"
-    if stops_count <= 20:
-        return "Qiskit QAOA quantum simulation"
     return "nearest-neighbour heuristic"
+
+
+def select_route_order(
+    matrix: np.ndarray,
+    requested_stops_count: int,
+) -> tuple[list[int], str]:
+    if len(matrix) < 8:
+        from qaoa import brute_force_route
+
+        return brute_force_route(matrix), "exact brute force"
+    return nearest_neighbour_route(matrix), "nearest-neighbour heuristic"
+
 
 async def optimise_route(
     addresses: list[str],
@@ -115,7 +120,7 @@ async def optimise_route(
     nearest_neighbour_distance = calculate_total_distance(nn_order, matrix)
     algorithm_name = describe_route_algorithm(len(valid_coords))
 
-    optimised_order, algorithm_used = get_optimised_route_with_algorithm(matrix)
+    optimised_order, algorithm_used = select_route_order(matrix, len(addresses))
     optimised_dist = calculate_total_distance(optimised_order, matrix)
     optimiser_dist = optimised_dist
     optimiser_vs_original = estimate_fuel_saving(original_order_distance, optimiser_dist)
@@ -125,7 +130,7 @@ async def optimise_route(
     print(f"  Algorithm used:     {algorithm_used}")
     print(f"  Input order distance:       {original_order_distance} km")
     print(f"  Nearest-neighbour distance: {nearest_neighbour_distance} km")
-    print(f"  Optimised/QAOA distance:    {optimiser_dist} km")
+    print(f"  Final selected distance:    {optimiser_dist} km")
     print(f"  Optimiser vs input order:   {optimiser_vs_original}%")
     print(f"  Optimiser vs nearest-neighbour: {optimiser_vs_nn}%")
 

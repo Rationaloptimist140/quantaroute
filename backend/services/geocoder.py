@@ -37,6 +37,10 @@ def extract_uk_outcode(address: str) -> str | None:
     return match.group(1).upper()
 
 
+def outcode_from_postcode(postcode: str) -> str:
+    return postcode[:-3].upper()
+
+
 async def lookup_postcode_endpoint(
     client: httpx.AsyncClient,
     base_url: str,
@@ -99,12 +103,12 @@ async def geocode_single_with_source(
             coord = await geocode_postcode(client, postcode)
             if coord:
                 return coord, used_nominatim
-        else:
-            outcode = extract_uk_outcode(address)
-            if outcode:
-                coord = await geocode_outcode(client, outcode)
-                if coord:
-                    return coord, used_nominatim
+
+        outcode = outcode_from_postcode(postcode) if postcode else extract_uk_outcode(address)
+        if outcode:
+            coord = await geocode_outcode(client, outcode)
+            if coord:
+                return coord, used_nominatim
 
         used_nominatim = True
         r = await client.get(

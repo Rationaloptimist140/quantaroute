@@ -80,6 +80,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Render `/` returned `{"detail":"Not Found"}`; FastAPI now serves `frontend/index.html`.
 - Frontend cached old `localhost:8000` text; page is served with `Cache-Control: no-store`.
 - Postcode-only requests could fail with `Need at least 2 geocoded addresses`; geocoder now supports active, terminated, and outward UK postcodes.
+- If a full postcode lookup fails, the geocoder now tries the outward code before falling back to Nominatim, reducing large-batch timeout risk.
 - Backend now returns friendlier `400` errors for geocoding validation failures instead of generic `500`.
 - Failed or malformed geocoder results are now filtered before distance-matrix work, avoiding `NoneType` crashes when an address cannot be geocoded.
 - OSRM `distances: null` or incomplete distance matrices now fall back to Haversine instead of crashing.

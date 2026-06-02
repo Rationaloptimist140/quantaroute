@@ -2,13 +2,17 @@
 
 ## Current Goal
 
-QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The main product message is practical fuel savings: paste or upload stops, optionally set a start address/depot, reorder delivery stops using real road-network distances, show the fuel saving percentage, and provide Google Maps and WhatsApp links before the driver sets off.
+QuantaRoute is a FastAPI + frontend app for UK courier route optimisation. The main product message is practical dispatch: turn delivery stops into a driver-ready Google Maps route in seconds, estimate fuel/distance savings against the entered order, and prepare WhatsApp-ready driver sharing with no app install.
+
+The product is now being shaped as both a normal SaaS web tool for humans and an agent-ready API/MCP-compatible tool for AI assistants and business agents.
 
 Current internal benchmark mode records route-quality evidence for each successful optimisation: original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus the original order.
 
 The working app and marketing page are now separated: `frontend/index.html` is the fast route-optimiser tool, while `frontend/landing.html` holds the courier-first explainer, pricing, and comparison copy.
 
-Live app: https://quantaroute.onrender.com
+Live app: https://quantaroute.co.uk
+
+Render URL: https://quantaroute.onrender.com
 
 GitHub repo: https://github.com/Rationaloptimist140/quantaroute
 
@@ -21,6 +25,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Built for UK couriers and delivery drivers.
 - Browser-first: no app download, no installation, no account setup required for the basic route flow.
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains an experimental/internal optimisation module, not the live route-selection promise.
+- API-first promise: agents can submit a start point, 2-20 delivery stops, optional end point, vehicle, and optimisation preference, then receive ordered stops, benchmark distances, estimated saving, a Google Maps URL, WhatsApp message, and warnings.
 - The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
@@ -62,16 +67,23 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/services/requirements.txt` - kept service dependency pins aligned.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
+- `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, and route-history saving for API requests.
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
-- `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, then Nominatim GB fallback.
+- `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, Nominatim GB fallback, and Photon fallback for commercial/place-name addresses.
+- `backend/services/geocoder.py` - Nominatim requests now include the QuantaRoute contact email in the User-Agent so the hosted service is identifiable to public geocoding infrastructure.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
+- `backend/services/route_builder.py` - extended shared Google Maps URL building to support optional end addresses and added a reusable WhatsApp message helper for the public API/MCP layer.
+- `backend/services/route_sheet.py` - dependency-free plain-text route sheet stub for future downloadable route sheet/PDF work.
 - `backend/services/road_matrix.py` - OSRM/Haversine distance matrix builder with coordinate validation and fallback handling for incomplete OSRM responses.
 - `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, multi-column CSV upload cleanup, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and subtle `About QuantaRoute`/contact links.
 - `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works route-selection explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, contact email, and a `Try QuantaRoute free` link back to the app.
+- `frontend/landing.html` - updated with API-first/product positioning, 20-stop Plymouth proof section, audience list, simplified how-it-works steps, agent-ready API/MCP section, safer savings language, and current pricing/payment copy.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
+- `mcp/server.ts` - MCP-ready TypeScript tool schema and wrapper for `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic.
+- `README.md` - refreshed API-first documentation, endpoint example, agent-ready direction, pricing, and safety language.
 
 ## Bugs Fixed
 
@@ -94,6 +106,10 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Google Maps directions can start from a cleaned start/depot address and optionally append that same start address at the end for round trips. The start address is not displayed as a numbered delivery stop.
 - API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
 - Frontend results now show a collapsed "Benchmark details" section when benchmark API fields are available.
+- Public API endpoint `POST /api/optimise-route` now returns structured success JSON and structured `success: false` error JSON for invalid route input, over-20-stop requests, payment/trial blocks, and geocoding/optimisation failures.
+- `/openapi.json` includes the agent route endpoint and request/response schemas.
+- `/llms.txt` explains QuantaRoute for AI agents and LLMs.
+- Public geocoding requests now use an identifiable User-Agent with the support email and a Photon fallback to reduce hosted commercial-address geocoder failure risk.
 
 ## Remaining Issues
 
@@ -101,6 +117,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Some postcode/outcode results may be approximate, especially terminated or outward-only inputs.
 - Fuel saving percent is based on the current naive route comparison and can be low for already efficient input order.
 - Benchmark distances currently compare the delivery stop order only. The optional start/depot address is included in Google Maps/WhatsApp links but is not geocoded into the benchmark distance matrix.
+- The new public API accepts `start` and optional `end` for Google Maps/agent output, but distance estimates still compare delivery-stop order only. API warnings state this explicitly.
+- `optimise_for = "time"` is accepted for API compatibility, but current routing still optimises for distance and returns a warning.
+- `vehicle` is accepted for API compatibility, but current estimates use the existing van-style routing assumptions and return a warning for non-van values.
+- MCP support is prepared as a TypeScript wrapper/schema in `mcp/server.ts`; a full packaged MCP runtime/server setup is still a follow-up.
+- PDF route sheet support is a dependency-free text stub only; full PDF generation is still a follow-up.
 - Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
 - Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.
@@ -163,6 +184,28 @@ $body = @{
 
 Invoke-RestMethod -Method Post `
   -Uri "https://quantaroute.onrender.com/quantum/route-optimise" `
+  -ContentType "application/json" `
+  -Body $body
+```
+
+Agent/public API smoke test:
+
+```powershell
+$body = @{
+  start = "Plymouth, UK"
+  stops = @(
+    "Drake Circus Shopping Centre, Plymouth",
+    "Royal William Yard, Plymouth",
+    "Plymouth Market, Plymouth",
+    "Plymouth Railway Station, Plymouth"
+  )
+  end = "Plymouth, UK"
+  vehicle = "van"
+  optimise_for = "distance"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "https://quantaroute.co.uk/api/optimise-route" `
   -ContentType "application/json" `
   -Body $body
 ```

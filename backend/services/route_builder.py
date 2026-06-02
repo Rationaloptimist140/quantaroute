@@ -32,12 +32,16 @@ def build_google_maps_url(
     ordered_addresses: list[str],
     start_address: str | None = None,
     return_to_start: bool = False,
+    end_address: str | None = None,
 ) -> str:
     clean_start = clean_route_address(start_address or "")
+    clean_end = clean_route_address(end_address or "")
     clean_addresses = [clean_route_address(addr) for addr in ordered_addresses]
     clean_addresses = [addr for addr in clean_addresses if addr]
     route_addresses = ([clean_start] if clean_start else []) + clean_addresses
-    if clean_start and return_to_start:
+    if clean_end:
+        route_addresses.append(clean_end)
+    elif clean_start and return_to_start:
         route_addresses.append(clean_start)
     if not route_addresses:
         return ""
@@ -46,12 +50,16 @@ def build_google_maps_url(
     return base + stops
 
 
-def build_whatsapp_url(maps_url: str, driver_name: str = "Driver") -> str:
-    """Build WhatsApp message URL with the route link."""
-    message = (
+def build_whatsapp_message(maps_url: str, driver_name: str = "Driver") -> str:
+    return (
         f"Hi {driver_name}! Your optimised route is ready. "
         f"Tap to open in Google Maps: {maps_url}"
     )
+
+
+def build_whatsapp_url(maps_url: str, driver_name: str = "Driver") -> str:
+    """Build WhatsApp message URL with the route link."""
+    message = build_whatsapp_message(maps_url, driver_name)
     encoded = urllib.parse.quote(message, safe=":/?=&,+%")
     return f"https://wa.me/?text={encoded}"
 
@@ -78,6 +86,7 @@ async def optimise_route(
     driver_name: str = "Driver",
     start_address: str | None = None,
     return_to_start: bool = False,
+    end_address: str | None = None,
 ) -> dict:
     """
     Full pipeline: addresses -> optimised route + URLs.
@@ -85,6 +94,7 @@ async def optimise_route(
     addresses = [clean_route_address(address) for address in addresses]
     addresses = [address for address in addresses if address]
     clean_start_address = clean_route_address(start_address or "")
+    clean_end_address = clean_route_address(end_address or "")
 
     if len(addresses) < 2:
         raise ValueError("Need at least 2 addresses to optimise")
@@ -160,6 +170,7 @@ async def optimise_route(
         ordered_addresses,
         start_address=clean_start_address,
         return_to_start=return_to_start,
+        end_address=clean_end_address,
     )
     whatsapp_url = build_whatsapp_url(maps_url, driver_name)
 
@@ -170,7 +181,8 @@ async def optimise_route(
         "optimised_order": optimised_order,
         "ordered_addresses": ordered_addresses,
         "start_address": clean_start_address or None,
-        "return_to_start": bool(clean_start_address and return_to_start),
+        "return_to_start": bool(clean_start_address and return_to_start and not clean_end_address),
+        "end_address": clean_end_address or None,
         "ordered_coords": ordered_coords,
         "total_distance_km": optimised_dist,
         "naive_distance_km": original_order_distance,

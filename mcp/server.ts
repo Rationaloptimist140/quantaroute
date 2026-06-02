@@ -1,0 +1,106 @@
+/**
+ * QuantaRoute MCP-ready tool wrapper.
+ *
+ * This module keeps the agent tool contract in TypeScript while reusing the
+ * production FastAPI endpoint. A full MCP runtime can import
+ * `optimiseDeliveryRouteTool` and `optimiseDeliveryRoute` instead of
+ * duplicating optimisation logic.
+ */
+
+export type OptimiseFor = "distance" | "time";
+
+export interface OptimiseRouteInput {
+  start: string;
+  stops: string[];
+  end?: string;
+  vehicle?: string;
+  optimise_for?: OptimiseFor;
+}
+
+export interface RouteError {
+  code: string;
+  message: string;
+  details: unknown[];
+}
+
+export interface OptimiseRouteResult {
+  success: boolean;
+  input_stop_count?: number;
+  ordered_stops?: string[];
+  original_distance_km?: number;
+  optimised_distance_km?: number;
+  distance_saved_km?: number;
+  estimated_saving_percent?: number;
+  google_maps_url?: string;
+  whatsapp_message?: string;
+  warnings?: string[];
+  error?: RouteError;
+}
+
+export const optimiseDeliveryRouteTool = {
+  name: "optimise_delivery_route",
+  description:
+    "Optimise a small multi-drop delivery route and return ordered stops, estimated distance saving, Google Maps link, and WhatsApp driver message.",
+  inputSchema: {
+    type: "object",
+    required: ["start", "stops"],
+    properties: {
+      start: {
+        type: "string",
+        description: "Depot, home base, town, postcode, or first pickup point.",
+      },
+      stops: {
+        type: "array",
+        minItems: 2,
+        maxItems: 20,
+        items: { type: "string" },
+        description: "Delivery addresses or appointment stops to optimise.",
+      },
+      end: {
+        type: "string",
+        description: "Optional final destination. Omit to finish at the final optimised stop.",
+      },
+      vehicle: {
+        type: "string",
+        default: "van",
+      },
+      optimise_for: {
+        type: "string",
+        enum: ["distance", "time"],
+        default: "distance",
+      },
+    },
+  },
+} as const;
+
+export async function optimiseDeliveryRoute(
+  input: OptimiseRouteInput,
+  apiBaseUrl = process.env.QUANTAROUTE_API_BASE_URL || "https://quantaroute.co.uk",
+): Promise<OptimiseRouteResult> {
+  const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/optimise-route`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      vehicle: "van",
+      optimise_for: "distance",
+      ...input,
+    }),
+  });
+
+  const data = (await response.json()) as OptimiseRouteResult;
+  if (!response.ok && data.success !== false) {
+    return {
+      success: false,
+      error: {
+        code: `HTTP_${response.status}`,
+        message: "QuantaRoute API returned an unexpected error.",
+        details: [data],
+      },
+    };
+  }
+
+  return data;
+}

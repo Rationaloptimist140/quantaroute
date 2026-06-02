@@ -8,18 +8,26 @@ import csv
 import io
 import re
 from pathlib import Path
+from typing import Literal
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
 from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import logging
 
-from services.route_builder import clean_route_address, optimise_route
+from services.route_builder import (
+    build_google_maps_url,
+    build_whatsapp_message,
+    clean_route_address,
+    optimise_route,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -55,6 +63,23 @@ from database import get_recent_routes, init_db, record_allowed_route_use, save_
 
 init_db()
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
+
+
+@app.exception_handler(RequestValidationError)
+async def api_validation_exception_handler(request: Request, exc: RequestValidationError):
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=422,
+            content={
+                "success": False,
+                "error": {
+                    "code": "INVALID_REQUEST",
+                    "message": "The request body is missing required fields or contains invalid values.",
+                    "details": exc.errors(),
+                },
+            },
+        )
+    return await request_validation_exception_handler(request, exc)
 
 
 def record_route_history(driver_name: str, result: dict) -> None:
@@ -275,9 +300,228 @@ class RouteResponse(BaseModel):
     geocoded_count: int
     failed_addresses: list[str]
 
+
+class PublicOptimiseRouteRequest(BaseModel):
+    start: str = Field(
+        ...,
+        min_length=1,
+        examples=["Plymouth, UK"],
+        description="Starting location, depot, home base, or first pickup point.",
+    )
+    stops: list[str] = Field(
+        ...,
+        min_length=2,
+        json_schema_extra={"maxItems": 20},
+        examples=[[
+            "Drake Circus Shopping Centre, Plymouth",
+            "Royal William Yard, Plymouth",
+            "Plymouth Market, Plymouth",
+            "Plymouth Railway Station, Plymouth",
+        ]],
+        description="Delivery or appointment stops to reorder. Initially supports 2 to 20 stops.",
+    )
+    end: str | None = Field(
+        default=None,
+        examples=["Plymouth, UK"],
+        description="Optional final destination. If omitted, the route ends at the final optimised stop.",
+    )
+    vehicle: str = Field(default="van", examples=["van"])
+    optimise_for: Literal["distance", "time"] = Field(default="distance")
+
+    model_config = {
+        "json_schema_extra": {
+            "examples": [
+                {
+                    "start": "Plymouth, UK",
+                    "stops": [
+                        "Drake Circus Shopping Centre, Plymouth",
+                        "Royal William Yard, Plymouth",
+                        "Plymouth Market, Plymouth",
+                        "Plymouth Railway Station, Plymouth",
+                    ],
+                    "end": "Plymouth, UK",
+                    "vehicle": "van",
+                    "optimise_for": "distance",
+                }
+            ]
+        }
+    }
+
+
+class PublicRouteError(BaseModel):
+    code: str
+    message: str
+    details: list[str] | list[dict] = Field(default_factory=list)
+
+
+class PublicOptimiseRouteSuccess(BaseModel):
+    success: bool
+    input_stop_count: int
+    ordered_stops: list[str]
+    original_distance_km: float
+    optimised_distance_km: float
+    distance_saved_km: float
+    estimated_saving_percent: float
+    google_maps_url: str
+    whatsapp_message: str
+    warnings: list[str]
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "success": True,
+                "input_stop_count": 4,
+                "ordered_stops": [
+                    "Plymouth, UK",
+                    "Plymouth Railway Station, Plymouth",
+                    "Plymouth Market, Plymouth",
+                    "Drake Circus Shopping Centre, Plymouth",
+                    "Royal William Yard, Plymouth",
+                    "Plymouth, UK",
+                ],
+                "original_distance_km": 22.0,
+                "optimised_distance_km": 19.1,
+                "distance_saved_km": 2.9,
+                "estimated_saving_percent": 13.2,
+                "google_maps_url": "https://www.google.com/maps/dir/Plymouth%2C%20UK/...",
+                "whatsapp_message": "Hi Driver! Your optimised route is ready. Tap to open in Google Maps: https://www.google.com/maps/dir/...",
+                "warnings": [
+                    "Distance estimates compare delivery stop order against the order entered.",
+                    "Drivers must follow live road conditions, vehicle restrictions, and professional judgement.",
+                ],
+            }
+        }
+    }
+
+
+class PublicOptimiseRouteErrorResponse(BaseModel):
+    success: bool = False
+    error: PublicRouteError
+
+
+def public_api_error(
+    status_code: int,
+    code: str,
+    message: str,
+    details: list[str] | list[dict] | None = None,
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "success": False,
+            "error": {
+                "code": code,
+                "message": message,
+                "details": details or [],
+            },
+        },
+    )
+
+
+def clean_public_stops(stops: list[str]) -> tuple[list[str], list[str]]:
+    warnings: list[str] = []
+    clean_stops: list[str] = []
+    seen: set[str] = set()
+
+    for raw_stop in stops:
+        stop = clean_route_address(raw_stop)
+        if not stop:
+            warnings.append("Empty stop removed.")
+            continue
+
+        key = stop.casefold()
+        if key in seen:
+            warnings.append(f"Duplicate stop removed: {stop}")
+            continue
+
+        seen.add(key)
+        clean_stops.append(stop)
+
+    return clean_stops, warnings
+
+
+def public_route_warnings(
+    request_data: PublicOptimiseRouteRequest,
+    result: dict,
+    input_warnings: list[str],
+) -> list[str]:
+    warnings = list(input_warnings)
+    if request_data.optimise_for == "time":
+        warnings.append("Time optimisation is not yet separate; distance optimisation was used.")
+    if request_data.vehicle != "van":
+        warnings.append("Vehicle type is accepted for API compatibility; current estimates use van-style routing.")
+    if result.get("failed_addresses"):
+        warnings.append(
+            "Some stops could not be geocoded and were excluded: "
+            + ", ".join(result["failed_addresses"])
+        )
+    warnings.append("Distance estimates compare delivery stop order against the order entered.")
+    warnings.append(
+        "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
+    )
+    return warnings
+
+
+def build_public_ordered_stops(
+    start: str,
+    ordered_delivery_stops: list[str],
+    end: str | None,
+) -> list[str]:
+    route = [clean_route_address(start)] + [
+        clean_route_address(stop) for stop in ordered_delivery_stops if clean_route_address(stop)
+    ]
+    clean_end = clean_route_address(end or "")
+    if clean_end:
+        route.append(clean_end)
+    return route
+
+
+LLMS_TXT = """# QuantaRoute
+
+QuantaRoute is a route optimisation tool for small UK couriers, multi-drop drivers, florists, mobile cleaners, tradespeople, property maintenance teams, estate agents, small retailers, and field service teams.
+
+It turns delivery addresses into an optimised stop order, estimates distance and fuel savings, creates a Google Maps route link, and prepares a WhatsApp-ready driver message.
+
+## Main API
+
+POST /api/optimise-route
+
+Use this endpoint when an AI assistant or business agent needs to optimise a route of 2-20 stops.
+
+## Input summary
+
+Required fields: start, stops.
+Optional fields: end, vehicle, optimise_for.
+
+## Output summary
+
+The API returns ordered stops, original distance, optimised distance, distance saved, estimated saving percent, Google Maps URL, WhatsApp driver message, and warnings.
+
+## Example task
+
+“Here are 18 delivery addresses. Optimise the route, estimate distance and fuel saving, create a Google Maps link, and prepare a WhatsApp message for the driver.”
+
+## Pricing
+
+First month free for testing. Then £1.99 per optimised route. Payments may still be in testing.
+
+## Safety
+
+QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic conditions, vehicle restrictions, and professional judgement.
+
+## Contact
+
+hi@quantaroute.co.uk
+"""
+
 @app.get("/health")
 def health():
     return {"status": "ok", "service": "QuantaRoute API", "version": "1.0.0"}
+
+
+@app.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)
+def llms_txt():
+    return PlainTextResponse(LLMS_TXT, media_type="text/plain; charset=utf-8")
 
 def frontend_file(filename: str) -> FileResponse:
     file_path = FRONTEND_DIR / filename
@@ -337,6 +581,137 @@ async def upload_csv(
 @app.get("/routes/history")
 def route_history():
     return get_recent_routes(limit=50)
+
+
+@app.post(
+    "/api/optimise-route",
+    response_model=PublicOptimiseRouteSuccess,
+    tags=["Agent API"],
+    summary="Optimise a small delivery route",
+    description=(
+        "Optimise 2-20 delivery stops for a UK courier or small operator, "
+        "then return distance benchmarks, estimated saving, Google Maps URL, "
+        "and a WhatsApp-ready driver message."
+    ),
+    responses={
+        400: {
+            "model": PublicOptimiseRouteErrorResponse,
+            "description": "Invalid route input or geocoding failure.",
+        },
+        402: {
+            "model": PublicOptimiseRouteErrorResponse,
+            "description": "Free trial ended.",
+        },
+        422: {
+            "model": PublicOptimiseRouteErrorResponse,
+            "description": "Invalid JSON or schema validation error.",
+        },
+    },
+)
+async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request: Request):
+    clean_start = clean_route_address(route_request.start)
+    clean_end = clean_route_address(route_request.end or "")
+    clean_stops, warnings = clean_public_stops(route_request.stops)
+
+    if not clean_start:
+        return public_api_error(
+            400,
+            "INVALID_START",
+            "Start address is required.",
+            ["Provide a depot, home base, town, postcode, or first pickup point."],
+        )
+
+    if len(clean_stops) < 2:
+        return public_api_error(
+            400,
+            "INVALID_STOPS",
+            "At least two valid delivery stops are required.",
+            warnings,
+        )
+
+    if len(clean_stops) > 20:
+        return public_api_error(
+            400,
+            "TOO_MANY_STOPS",
+            "The public API currently supports up to 20 delivery stops.",
+            ["Split larger routes into smaller batches for now."],
+        )
+
+    usage_response = enforce_usage_limit(request)
+    if usage_response:
+        return public_api_error(
+            402,
+            "PAYMENT_REQUIRED",
+            "Free trial ended. Please upgrade to continue at £1.99 per route.",
+            [UPGRADE_URL],
+        )
+
+    try:
+        result = await optimise_route(
+            addresses=clean_stops,
+            driver_name="Driver",
+            start_address=clean_start,
+            return_to_start=False,
+            end_address=clean_end or None,
+        )
+    except ValueError as e:
+        logger.warning(f"Public API optimisation validation failed: {e}")
+        return public_api_error(
+            400,
+            "GEOCODING_FAILED",
+            "Could not geocode one or more addresses.",
+            [str(e)],
+        )
+    except Exception as e:
+        logger.error(f"Public API optimisation failed: {e}")
+        return public_api_error(
+            500,
+            "OPTIMISATION_FAILED",
+            "The route optimisation service could not complete this request.",
+            [str(e)],
+        )
+
+    if result.get("geocoded_count", 0) < 2:
+        return public_api_error(
+            400,
+            "GEOCODING_FAILED",
+            "Could not geocode enough valid addresses to optimise the route.",
+            result.get("failed_addresses", []),
+        )
+
+    if clean_end:
+        result["maps_url"] = build_google_maps_url(
+            result["ordered_addresses"],
+            start_address=clean_start,
+            end_address=clean_end,
+        )
+
+    original_distance = float(result.get("original_order_distance_km") or result.get("naive_distance_km") or 0)
+    optimised_distance = float(result.get("final_selected_distance_km") or result.get("total_distance_km") or 0)
+    distance_saved = round(max(original_distance - optimised_distance, 0.0), 2)
+    estimated_saving_percent = float(result.get("fuel_saving_percent_vs_original") or result.get("fuel_saving_percent") or 0)
+    estimated_saving_percent = max(round(estimated_saving_percent, 2), 0.0)
+    google_maps_url = result.get("maps_url", "")
+    whatsapp_message = build_whatsapp_message(google_maps_url, "Driver")
+
+    record_route_history(driver_name="API Agent", result=result)
+
+    return {
+        "success": True,
+        "input_stop_count": len(clean_stops),
+        "ordered_stops": build_public_ordered_stops(
+            clean_start,
+            result.get("ordered_addresses", []),
+            clean_end or None,
+        ),
+        "original_distance_km": round(original_distance, 2),
+        "optimised_distance_km": round(optimised_distance, 2),
+        "distance_saved_km": distance_saved,
+        "estimated_saving_percent": estimated_saving_percent,
+        "google_maps_url": google_maps_url,
+        "whatsapp_message": whatsapp_message,
+        "warnings": public_route_warnings(route_request, result, warnings),
+    }
 
 @app.post("/quantum/route-optimise", response_model=RouteResponse)
 async def route_optimise(route_request: RouteRequest, request: Request):

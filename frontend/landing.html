@@ -181,7 +181,9 @@
     }
 
     .scenario-list,
-    .pricing-list {
+    .pricing-list,
+    .audience-list,
+    .steps-list {
       display: grid;
       gap: 9px;
       margin: 12px 0 0;
@@ -190,9 +192,24 @@
     }
 
     .scenario-list li,
-    .pricing-list li {
+    .pricing-list li,
+    .audience-list li,
+    .steps-list li {
       color: var(--text);
       line-height: 1.45;
+    }
+
+    .audience-list {
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    }
+
+    .audience-list li,
+    .steps-list li {
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #FFFFFF;
+      font-weight: 500;
     }
 
     .saving-line {
@@ -251,6 +268,16 @@
       text-align: center;
     }
 
+    .note {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #F7F8FA;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
     .footer a {
       color: var(--accent);
       font-weight: 600;
@@ -307,50 +334,58 @@
     </header>
 
     <section class="card hero">
-      <h2>Paste your stops, get the best route, and see the fuel saved</h2>
-      <p>QuantaRoute helps individual couriers and small delivery operators turn a messy multi-drop list into a cleaner Google Maps route. No app to install. Works in WhatsApp, on mobile, and in the browser.</p>
+      <h2>Turn 20 delivery stops into a driver-ready Google Maps route in seconds</h2>
+      <p>Paste your addresses, compare route options, see estimated fuel savings, and send the final route to your driver by WhatsApp. No app install needed.</p>
       <div class="hero-actions">
-        <a class="button" href="index.html">Try QuantaRoute free</a>
-        <a class="button-secondary" href="#pricing">View pricing</a>
+        <a class="button" href="index.html">Try QuantaRoute Free</a>
+        <a class="button-secondary" href="#proof">See Example Savings</a>
       </div>
+    </section>
+
+    <section class="card" aria-labelledby="whoTitle">
+      <h2 class="section-title" id="whoTitle">Who it is for</h2>
+      <p class="section-lead">QuantaRoute is built for small operators who need a practical route quickly, without buying full fleet software.</p>
+      <ul class="audience-list">
+        <li>Same-day couriers</li>
+        <li>Florists</li>
+        <li>Mobile cleaners</li>
+        <li>Tradespeople</li>
+        <li>Property maintenance teams</li>
+        <li>Estate agents visiting properties</li>
+        <li>Small shops doing local delivery</li>
+        <li>Field service teams</li>
+        <li>Care or appointment-based route planning</li>
+      </ul>
     </section>
 
     <section class="card" aria-labelledby="howTitle">
-      <h2 class="section-title" id="howTitle">How it works for couriers</h2>
-      <p class="section-lead">It is built for the everyday multi-drop job: paste the stops once, compare route options, then send the chosen route to Google Maps or WhatsApp.</p>
-
-      <div class="grid three">
-        <article class="mini-card">
-          <h3>Start with your real stops</h3>
-          <p>Paste addresses or upload a CSV, add your depot or home start point, and choose whether you need to return to start.</p>
-        </article>
-        <article class="mini-card">
-          <h3>Compare better route candidates</h3>
-          <p>Most simple planners lean on greedy nearest-neighbour choices. They are fast, but can pick the next closest stop and miss a better overall route.</p>
-        </article>
-        <article class="mini-card">
-          <h3>Return the safe final route</h3>
-          <p>QuantaRoute compares the original order, nearest-neighbour, and the final selected route. It only returns the final route when it is not worse than the baseline.</p>
-        </article>
-      </div>
+      <h2 class="section-title" id="howTitle">How it works</h2>
+      <p class="section-lead">Turn delivery stops into a driver-ready Google Maps route in a few simple steps.</p>
+      <ol class="steps-list">
+        <li>Paste or upload addresses.</li>
+        <li>Optimise the stop order.</li>
+        <li>Review distance and estimated fuel saving.</li>
+        <li>Open the route in Google Maps.</li>
+        <li>Share the driver route by WhatsApp.</li>
+      </ol>
     </section>
 
-    <section class="card" aria-labelledby="scenarioTitle">
+    <section class="card" id="proof" aria-labelledby="proofTitle">
       <div class="grid two">
         <article class="mini-card scenario">
-          <h2 class="section-title" id="scenarioTitle">Courier scenario: Plymouth multi-drop route</h2>
+          <h2 class="section-title" id="proofTitle">Real route test: 20 Plymouth commercial stops</h2>
           <ul class="scenario-list">
-            <li>You start in Plymouth with 20 stops.</li>
-            <li>You paste the addresses once.</li>
-            <li>QuantaRoute orders them using road-based route optimisation.</li>
-            <li>You open the route in Google Maps and share it by WhatsApp if needed.</li>
+            <li>Original order: 220.0 km</li>
+            <li>Nearest-neighbour route: 204.6 km</li>
+            <li>QuantaRoute final route: 190.5 km</li>
+            <li>Saving vs original: 29.5 km shorter</li>
           </ul>
-          <div class="saving-line">Example: 13.4% fuel saved vs original order.</div>
+          <div class="saving-line">Estimated fuel saving: 13.4%</div>
         </article>
 
         <article class="mini-card">
-          <h3>Benchmark proof</h3>
-          <p>Benchmark details show whether the result improved on the stop order you entered.</p>
+          <h3>How the proof works</h3>
+          <p>QuantaRoute compares the entered stop order against alternative route candidates and shows estimated savings against the original order.</p>
           <div class="proof-metrics" aria-label="Example benchmark distances">
             <div class="proof-metric">
               <span>Original order</span>
@@ -371,16 +406,17 @@
           </div>
         </article>
       </div>
+      <p class="note">Estimated savings are calculated against the address order entered. Real-world results may vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints.</p>
     </section>
 
     <section class="card" aria-labelledby="compareTitle">
       <h2 class="section-title" id="compareTitle">QuantaRoute vs simpler route planners</h2>
-      <p class="section-lead">Navigation apps are great for following a route. QuantaRoute is focused on choosing the route order first, showing the fuel saving, and giving couriers proof before they set off.</p>
+      <p class="section-lead">Navigation apps are great for following a route. QuantaRoute is focused on route optimisation first: comparing options, showing estimated savings, and creating a driver-ready Google Maps link.</p>
 
       <div class="grid three">
         <article class="mini-card">
           <h3>Optimisation, not just navigation</h3>
-          <p>It compares multiple route candidates before handing the result to Google Maps, instead of only guiding you from one stop to the next.</p>
+          <p>It compares the original address order with alternative route candidates before handing the result to Google Maps.</p>
         </article>
         <article class="mini-card">
           <h3>Courier-friendly sharing</h3>
@@ -393,21 +429,44 @@
       </div>
     </section>
 
+    <section class="card" aria-labelledby="agentTitle">
+      <h2 class="section-title" id="agentTitle">Agent-ready route optimisation</h2>
+      <p class="section-lead">QuantaRoute is being developed as an API and MCP-compatible tool for AI assistants and business agents.</p>
+
+      <div class="grid two">
+        <article class="mini-card">
+          <h3>Example agent task</h3>
+          <p>"Here are 18 delivery addresses. Optimise the route, estimate distance and fuel saving, create a Google Maps link, and prepare a WhatsApp message for the driver."</p>
+        </article>
+        <article class="mini-card">
+          <h3>Available and coming soon</h3>
+          <ul class="pricing-list">
+            <li>POST /api/optimise-route</li>
+            <li>GET /openapi.json</li>
+            <li>GET /llms.txt</li>
+            <li>MCP tool: optimise_delivery_route</li>
+          </ul>
+        </article>
+      </div>
+
+      <p class="note">For selected route sizes, QuantaRoute may use advanced optimisation methods. For practical route sizes, it uses route heuristics and safety checks.</p>
+    </section>
+
     <section class="card" id="pricing" aria-labelledby="pricingTitle">
       <h2 class="section-title" id="pricingTitle">Simple pricing</h2>
-      <p class="section-lead">Start free, prove the fuel savings, then pay only when you optimise a route.</p>
+      <p class="section-lead">First month free for testing. Then £1.99 per optimised route. No subscription. No monthly fee. Pay only when you need a route.</p>
 
       <div class="grid two">
         <div class="pricing-callout">
           <span class="price">£1.99/route</span>
           <strong>After your free first month.</strong>
-          <span>No subscription. No monthly fee. Pay only when you use it.</span>
+          <span>Payments coming soon - currently free to test.</span>
         </div>
         <ul class="pricing-list">
           <li>Free for your first month with unlimited test routes.</li>
           <li>Built for individual couriers and small delivery operators.</li>
           <li>Google Maps and WhatsApp links included.</li>
-          <li>Stripe checkout is being added soon.</li>
+          <li>No subscription, monthly fee, or per-driver software contract.</li>
         </ul>
       </div>
 

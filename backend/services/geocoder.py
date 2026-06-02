@@ -12,10 +12,11 @@ import re
 logger = logging.getLogger(__name__)
 
 NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
+PHOTON_URL = "https://photon.komoot.io/api/"
 POSTCODES_URL = "https://api.postcodes.io/postcodes"
 TERMINATED_POSTCODES_URL = "https://api.postcodes.io/terminated_postcodes"
 OUTCODES_URL = "https://api.postcodes.io/outcodes"
-HEADERS = {"User-Agent": "QuantaRoute/1.0"}
+HEADERS = {"User-Agent": "QuantaRoute/1.0 (hi@quantaroute.co.uk)"}
 POSTCODE_RE = re.compile(
     r"\b([A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\b",
     re.IGNORECASE,
@@ -92,6 +93,36 @@ async def geocode_outcode(client: httpx.AsyncClient, outcode: str) -> tuple | No
         return None
 
 
+async def geocode_photon(client: httpx.AsyncClient, address: str) -> tuple | None:
+    try:
+        r = await client.get(
+            PHOTON_URL,
+            params={
+                "q": f"{address}, UK",
+                "limit": 1,
+                "lang": "en",
+            },
+            headers=HEADERS,
+            timeout=10.0,
+        )
+        r.raise_for_status()
+        data = r.json()
+        features = data.get("features") or []
+        if not features:
+            return None
+        properties = features[0].get("properties") or {}
+        if properties.get("countrycode") not in {None, "GB", "gb"}:
+            return None
+        coordinates = features[0].get("geometry", {}).get("coordinates")
+        if not coordinates or len(coordinates) < 2:
+            return None
+        lng, lat = coordinates[:2]
+        return (float(lat), float(lng))
+    except Exception as e:
+        logger.warning(f"Photon lookup failed for {address}: {e}")
+        return None
+
+
 async def geocode_single_with_source(
     client: httpx.AsyncClient,
     address: str,
@@ -126,6 +157,9 @@ async def geocode_single_with_source(
         data = r.json()
         if data:
             return (float(data[0]["lat"]), float(data[0]["lon"])), used_nominatim
+        coord = await geocode_photon(client, address)
+        if coord:
+            return coord, used_nominatim
         logger.warning(f"No result for: {address}")
         return None, used_nominatim
     except Exception as e:

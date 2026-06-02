@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
+APP_BUILD = "agent-api-2026-06-02"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -516,7 +517,12 @@ hi@quantaroute.co.uk
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "service": "QuantaRoute API", "version": "1.0.0"}
+    return {
+        "status": "ok",
+        "service": "QuantaRoute API",
+        "version": "1.0.0",
+        "build": APP_BUILD,
+    }
 
 
 @app.get("/llms.txt", response_class=PlainTextResponse, include_in_schema=False)

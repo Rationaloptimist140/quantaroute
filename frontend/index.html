@@ -847,6 +847,7 @@
           <div class="actions">
             <a class="action" id="mapsButton" href="#" target="_blank" rel="noopener">🗺️ Google Maps</a>
             <a class="action" id="whatsappButton" href="#" target="_blank" rel="noopener">💬 WhatsApp</a>
+            <a class="action hidden" id="routeSheetButton" href="#" target="_blank" rel="noopener">Open Route Sheet</a>
           </div>
         </div>
       </section>
@@ -904,6 +905,7 @@
     const stopList = document.querySelector("#stopList");
     const mapsButton = document.querySelector("#mapsButton");
     const whatsappButton = document.querySelector("#whatsappButton");
+    const routeSheetButton = document.querySelector("#routeSheetButton");
     const historyToggle = document.querySelector("#historyToggle");
     const historyContent = document.querySelector("#historyContent");
     const historyStatus = document.querySelector("#historyStatus");
@@ -1157,6 +1159,8 @@
       totalDistance.textContent = `${Number(data.total_distance_km || 0).toFixed(1)} km`;
       mapsButton.href = data.maps_url || "#";
       whatsappButton.href = data.whatsapp_url || "#";
+      routeSheetButton.href = data.route_sheet_url || "#";
+      routeSheetButton.classList.toggle("hidden", !data.route_sheet_url);
       const cleanedStartAddress = cleanDisplayedAddress(data.start_address || "");
       startNote.textContent = cleanedStartAddress ? `Route starts from: ${cleanedStartAddress}` : "";
       startNote.classList.toggle("hidden", !cleanedStartAddress);

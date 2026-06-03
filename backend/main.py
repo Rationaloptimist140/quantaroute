@@ -17,7 +17,7 @@ from fastapi import FastAPI, HTTPException, Request, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import logging
@@ -30,6 +30,7 @@ from services.route_builder import (
     clean_route_address,
     optimise_route,
 )
+from services.route_sheet import build_route_sheet_html
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -62,7 +63,13 @@ ASSETS_DIR = FRONTEND_DIR / "assets"
 if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
-from database import get_recent_routes, init_db, record_allowed_route_use, save_route
+from database import (
+    get_recent_routes,
+    get_route_by_id,
+    init_db,
+    record_allowed_route_use,
+    save_route,
+)
 
 init_db()
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
@@ -90,11 +97,16 @@ async def api_validation_exception_handler(request: Request, exc: RequestValidat
     return await request_validation_exception_handler(request, exc)
 
 
-def record_route_history(driver_name: str, result: dict) -> None:
+def build_route_sheet_url(request: Request, route_id: int) -> str:
+    return f"{str(request.base_url).rstrip('/')}/route-sheet/{route_id}"
+
+
+def record_route_history(driver_name: str, result: dict) -> int | None:
     try:
-        save_route(driver_name=driver_name, result=result)
+        return save_route(driver_name=driver_name, result=result)
     except Exception as e:
         logger.error(f"Failed to save route history: {e}")
+        return None
 
 
 def get_client_identifier(request: Request) -> str:
@@ -304,6 +316,7 @@ class RouteResponse(BaseModel):
     fuel_saving_percent_vs_original: float
     maps_url: str
     whatsapp_url: str
+    route_sheet_url: str | None = None
     stops_count: int
     geocoded_count: int
     failed_addresses: list[str]
@@ -372,6 +385,7 @@ class PublicOptimiseRouteSuccess(BaseModel):
     estimated_saving_percent: float
     google_maps_url: str
     whatsapp_message: str
+    route_sheet_url: str | None = None
     warnings: list[str]
 
     model_config = {
@@ -393,8 +407,9 @@ class PublicOptimiseRouteSuccess(BaseModel):
                 "estimated_saving_percent": 13.2,
                 "google_maps_url": "https://www.google.com/maps/dir/Plymouth%2C%20UK/...",
                 "whatsapp_message": "Hi Driver! Your optimised route is ready. Tap to open in Google Maps: https://www.google.com/maps/dir/...",
+                "route_sheet_url": "https://quantaroute.co.uk/route-sheet/123",
                 "warnings": [
-                    "Distance estimates compare delivery stop order against the order entered.",
+                    "Distance estimates compare route candidates against the address order entered.",
                     "Drivers must follow live road conditions, vehicle restrictions, and professional judgement.",
                 ],
             }
@@ -613,12 +628,22 @@ async def upload_csv(
                 "details": e.as_details(),
             },
         )
-    record_route_history(driver_name=driver_name, result=result)
-    return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+    route_id = record_route_history(driver_name=driver_name, result=result)
+    if route_id is not None:
+        result["route_sheet_url"] = build_route_sheet_url(request, route_id)
+    return RouteResponse(**{k: result.get(k) for k in RouteResponse.model_fields})
 
 @app.get("/routes/history")
 def route_history():
     return get_recent_routes(limit=50)
+
+
+@app.get("/route-sheet/{route_id}", response_class=HTMLResponse, include_in_schema=False)
+def route_sheet(route_id: int):
+    route = get_route_by_id(route_id)
+    if route is None:
+        raise HTTPException(status_code=404, detail="Route sheet not found")
+    return HTMLResponse(build_route_sheet_html(route))
 
 
 @app.post(
@@ -760,7 +785,8 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
     google_maps_url = result.get("maps_url", "")
     whatsapp_message = build_whatsapp_message(google_maps_url, "Driver")
 
-    record_route_history(driver_name="API Agent", result=result)
+    route_id = record_route_history(driver_name="API Agent", result=result)
+    route_sheet_url = build_route_sheet_url(request, route_id) if route_id is not None else None
 
     return {
         "success": True,
@@ -776,6 +802,7 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
         "estimated_saving_percent": estimated_saving_percent,
         "google_maps_url": google_maps_url,
         "whatsapp_message": whatsapp_message,
+        "route_sheet_url": route_sheet_url,
         "warnings": public_route_warnings(route_request, result, warnings),
     }
 
@@ -795,8 +822,10 @@ async def route_optimise(route_request: RouteRequest, request: Request):
             start_address=route_request.start_address,
             return_to_start=route_request.return_to_start,
         )
-        record_route_history(driver_name=route_request.driver_name, result=result)
-        return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+        route_id = record_route_history(driver_name=route_request.driver_name, result=result)
+        if route_id is not None:
+            result["route_sheet_url"] = build_route_sheet_url(request, route_id)
+        return RouteResponse(**{k: result.get(k) for k in RouteResponse.model_fields})
     except RouteGeocodingError as e:
         logger.warning(f"Optimisation geocoding failed: {e.failed_addresses}")
         raise HTTPException(

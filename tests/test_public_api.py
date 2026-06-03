@@ -2,6 +2,7 @@ from fastapi.testclient import TestClient
 
 from backend import main
 from backend.main import app
+from database import save_route
 
 
 client = TestClient(app)
@@ -62,6 +63,7 @@ def test_public_api_success(monkeypatch):
     assert data["input_stop_count"] == 4
     assert data["google_maps_url"].startswith("https://www.google.com/maps/dir/")
     assert "Tap to open in Google Maps" in data["whatsapp_message"]
+    assert data["route_sheet_url"].startswith("http://testserver/route-sheet/")
 
 
 def test_bad_json_returns_structured_validation_error():
@@ -153,3 +155,16 @@ def test_developers_page_is_served():
     assert response.status_code == 200
     assert "optimise_delivery_route" in response.text
     assert "POST /api/optimise-route" in response.text
+
+
+def test_route_sheet_endpoint_renders_saved_route():
+    route_id = save_route("Test Driver", fake_route_result())
+
+    response = client.get(f"/route-sheet/{route_id}")
+
+    assert response.status_code == 200
+    assert "QuantaRoute Driver Route Sheet" in response.text
+    assert "Royal William Yard, Plymouth, PL1 3RP" in response.text
+    assert "https://www.google.com/maps/dir/Plymouth/Stop" in response.text
+    assert "Original" in response.text
+    assert "Optimised" in response.text

@@ -19,6 +19,7 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 - Optional start/depot address and return-to-start support
 - Google Maps route link
 - WhatsApp-ready driver message/link
+- Printable browser route sheet
 - CSV upload or pasted stops
 - Mobile-friendly browser app
 
@@ -41,7 +42,7 @@ POST `/api/optimise-route`
 }
 ```
 
-The endpoint returns ordered stops, original and optimised distance estimates, distance saved, estimated saving percentage, a Google Maps URL, a WhatsApp driver message, and warnings.
+The endpoint returns ordered stops, original and optimised distance estimates, distance saved, estimated saving percentage, a Google Maps URL, a WhatsApp driver message, printable route sheet URL, and warnings.
 
 ## Agent-Ready Direction
 
@@ -58,6 +59,7 @@ MCP preparation lives in `mcp/server.ts` with the `optimise_delivery_route` tool
 - Web app: https://quantaroute.co.uk
 - Developer page: https://quantaroute.co.uk/developers.html
 - Public API: `POST /api/optimise-route`
+- Printable route sheet: `/route-sheet/{route_id}`
 - OpenAPI JSON: https://quantaroute.co.uk/openapi.json
 - LLM guide: https://quantaroute.co.uk/llms.txt
 - MCP tool: `optimise_delivery_route`

@@ -29,6 +29,7 @@ export interface OptimiseRouteResult {
   estimated_saving_percent?: number;
   google_maps_url?: string;
   whatsapp_message?: string;
+  route_sheet_url?: string;
   warnings?: string[];
   error?: RouteError;
 }

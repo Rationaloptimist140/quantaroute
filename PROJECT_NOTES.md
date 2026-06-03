@@ -36,6 +36,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
   - total distance
   - direct Google Maps link
   - WhatsApp share link
+  - printable route sheet link
 - Differentiators from the pitch:
   - Live route selection uses exact brute force for small routes and nearest-neighbour heuristics for larger routes to keep Render/free-tier requests responsive.
   - Qiskit QAOA simulation remains in the codebase for internal experimentation, but is not used as the live default after stress testing showed larger QAOA jobs can exceed request limits.
@@ -77,9 +78,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/services/route_builder.py` - extended shared Google Maps URL building to support optional end addresses and added a reusable WhatsApp message helper for the public API/MCP layer.
 - `backend/services/route_builder.py` - reported original, nearest-neighbour, and final route distances now include optional start and end/return-to-start points instead of only delivery stops.
 - `frontend/index.html` - displays structured geocoding failures with the exact failed stop and helpful postcode/full-address guidance.
-- `backend/services/route_sheet.py` - dependency-free plain-text route sheet stub for future downloadable route sheet/PDF work.
+- `backend/services/route_sheet.py` - dependency-free plain-text route sheet helper kept for future downloadable route sheet/PDF work.
+- `backend/services/route_sheet.py` - printable HTML route sheet renderer with summary, numbered stops, Google Maps link, WhatsApp driver message, print button, and safety note.
 - `backend/services/road_matrix.py` - OSRM/Haversine distance matrix builder with coordinate validation and fallback handling for incomplete OSRM responses.
 - `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, multi-column CSV upload cleanup, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and subtle `About QuantaRoute`/contact links.
+- `frontend/index.html` - route results now include an `Open Route Sheet` action when `route_sheet_url` is returned.
 - `frontend/landing.html` - separate Premium White marketing page with courier-first hero, how-it-works route-selection explainer, Plymouth courier scenario, benchmark proof example, comparison copy, pricing, contact email, and a `Try QuantaRoute free` link back to the app.
 - `frontend/landing.html` - updated with API-first/product positioning, 20-stop Plymouth proof section, audience list, simplified how-it-works steps, agent-ready API/MCP section, safer savings language, and current pricing/payment copy.
 - `frontend/landing.html` - links to `developers.html`, `/openapi.json`, and `/llms.txt` for public developer/agent access.
@@ -118,6 +121,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
 - Frontend results now show a collapsed "Benchmark details" section when benchmark API fields are available.
 - Public API endpoint `POST /api/optimise-route` now returns structured success JSON and structured `success: false` error JSON for invalid route input, over-20-stop requests, payment/trial blocks, and geocoding/optimisation failures.
+- Successful route optimisation responses can now include `route_sheet_url`, using the saved SQLite route ID.
+- `GET /route-sheet/{route_id}` renders a printable driver route sheet from saved route history.
 - Public API has non-blocking future TODOs for `X-API-Key`, rate limiting, and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
@@ -136,7 +141,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Name-only commercial stops can still fail in hosted geocoding; full business addresses with UK postcodes are much more reliable.
 - `optimise_for = "time"` is accepted for API compatibility, but current routing still optimises for distance and returns a warning.
 - `vehicle` is accepted for API compatibility, but current estimates use the existing van-style routing assumptions and return a warning for non-van values.
-- PDF route sheet support is a dependency-free text stub only; full PDF generation is still a follow-up.
+- Full PDF generation is still a follow-up; current route sheets use printable HTML and browser print-to-PDF.
+- Route sheets use SQLite route IDs, so Render free-tier filesystem resets can make older route sheet URLs unavailable after restarts/redeploys.
+- PDF export is not implemented; users can print the HTML route sheet or use browser print-to-PDF.
 - Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
 - Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.

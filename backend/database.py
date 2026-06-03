@@ -56,6 +56,7 @@ def init_db() -> None:
         ensure_column(conn, "routes", "final_selected_distance_km", "REAL")
         ensure_column(conn, "routes", "fuel_saving_percent_vs_original", "REAL")
         ensure_column(conn, "routes", "start_address", "TEXT")
+        ensure_column(conn, "routes", "end_address", "TEXT")
         ensure_column(conn, "routes", "return_to_start", "INTEGER DEFAULT 0")
         conn.execute(
             """
@@ -88,11 +89,12 @@ def save_route(driver_name: str, result: dict[str, Any]) -> int:
                 final_selected_distance_km,
                 fuel_saving_percent_vs_original,
                 start_address,
+                end_address,
                 return_to_start,
                 ordered_addresses,
                 maps_url
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 driver_name,
@@ -105,6 +107,7 @@ def save_route(driver_name: str, result: dict[str, Any]) -> int:
                 result.get("final_selected_distance_km"),
                 result.get("fuel_saving_percent_vs_original"),
                 result.get("start_address"),
+                result.get("end_address"),
                 int(bool(result.get("return_to_start"))),
                 ordered_addresses,
                 result.get("maps_url"),
@@ -131,6 +134,7 @@ def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
                 final_selected_distance_km,
                 fuel_saving_percent_vs_original,
                 start_address,
+                end_address,
                 return_to_start,
                 ordered_addresses,
                 maps_url,
@@ -152,6 +156,48 @@ def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
         record["return_to_start"] = bool(record.get("return_to_start"))
         history.append(record)
     return history
+
+
+def decode_route_row(row: sqlite3.Row | None) -> dict[str, Any] | None:
+    if row is None:
+        return None
+    record = dict(row)
+    try:
+        record["ordered_addresses"] = json.loads(record["ordered_addresses"] or "[]")
+    except json.JSONDecodeError:
+        record["ordered_addresses"] = []
+    record["return_to_start"] = bool(record.get("return_to_start"))
+    return record
+
+
+def get_route_by_id(route_id: int) -> dict[str, Any] | None:
+    init_db()
+    with get_connection() as conn:
+        row = conn.execute(
+            """
+            SELECT
+                id,
+                driver_name,
+                stops_count,
+                fuel_saving_percent,
+                total_distance_km,
+                naive_distance_km,
+                original_order_distance_km,
+                nearest_neighbour_distance_km,
+                final_selected_distance_km,
+                fuel_saving_percent_vs_original,
+                start_address,
+                end_address,
+                return_to_start,
+                ordered_addresses,
+                maps_url,
+                created_at
+            FROM routes
+            WHERE id = ?
+            """,
+            (route_id,),
+        ).fetchone()
+    return decode_route_row(row)
 
 
 def get_or_create_user(identifier: str) -> dict[str, Any]:

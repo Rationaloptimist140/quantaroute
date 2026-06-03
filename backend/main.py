@@ -553,6 +553,11 @@ def frontend():
 def landing_page():
     return frontend_file("landing.html")
 
+@app.get("/developers", include_in_schema=False)
+@app.get("/developers.html", include_in_schema=False)
+def developers_page():
+    return frontend_file("developers.html")
+
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
     return frontend_file("landing.html")

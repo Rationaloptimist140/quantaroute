@@ -121,3 +121,11 @@ def test_openapi_includes_public_api_route():
 
     assert response.status_code == 200
     assert "/api/optimise-route" in response.text
+
+
+def test_developers_page_is_served():
+    response = client.get("/developers.html")
+
+    assert response.status_code == 200
+    assert "optimise_delivery_route" in response.text
+    assert "POST /api/optimise-route" in response.text

@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QuantaRoute Developers</title>
+  <link href="https://api.fontshare.com/v2/css?f[]=satoshi@400,500,700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #F7F8FA;
+      --card: #FFFFFF;
+      --accent: #1A6B3C;
+      --accent-hover: #155C32;
+      --success: #16A34A;
+      --text: #0F172A;
+      --muted: #64748B;
+      --line: #E2E8F0;
+      --radius: 12px;
+      --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: 'Satoshi', 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px 16px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      flex: 0 0 auto;
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 1.45rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .brand p,
+    .lead,
+    .muted {
+      color: var(--muted);
+    }
+
+    .brand p {
+      margin: 4px 0 0;
+      font-size: 0.92rem;
+    }
+
+    .button,
+    .button-secondary {
+      min-height: 46px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 18px;
+      border-radius: 10px;
+      font-weight: 600;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .button {
+      border: 1px solid var(--accent);
+      background: var(--accent);
+      color: #FFFFFF;
+    }
+
+    .button:hover {
+      background: var(--accent-hover);
+      border-color: var(--accent-hover);
+    }
+
+    .button-secondary {
+      border: 1px solid var(--line);
+      background: #FFFFFF;
+      color: var(--text);
+    }
+
+    .card {
+      margin-bottom: 24px;
+      padding: 32px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      box-shadow: var(--shadow);
+    }
+
+    .hero h2 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(2.1rem, 7vw, 4rem);
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    .hero p,
+    .lead {
+      max-width: 760px;
+      margin: 16px 0 0;
+      font-size: clamp(1rem, 3vw, 1.18rem);
+      line-height: 1.55;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 22px;
+    }
+
+    h2 {
+      margin: 0 0 10px;
+      font-size: clamp(1.45rem, 5vw, 2.15rem);
+      font-weight: 700;
+      line-height: 1.08;
+    }
+
+    h3 {
+      margin: 18px 0 8px;
+      font-size: 1.05rem;
+      font-weight: 700;
+    }
+
+    p {
+      line-height: 1.55;
+    }
+
+    .grid {
+      display: grid;
+      gap: 12px;
+    }
+
+    .mini-card {
+      padding: 20px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #FFFFFF;
+    }
+
+    .mini-card p {
+      margin: 0;
+      color: var(--muted);
+    }
+
+    .endpoint {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 10px;
+      border: 1px solid rgba(26, 107, 60, 0.24);
+      border-radius: 8px;
+      background: #F0FDF4;
+      color: var(--accent);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    pre {
+      margin: 14px 0 0;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #0F172A;
+      color: #F8FAFC;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #F7F8FA;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .link-list {
+      display: grid;
+      gap: 10px;
+      margin: 12px 0 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .link-list a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .footer {
+      padding: 0 0 12px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    .footer a {
+      color: var(--accent);
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .footer span {
+      color: var(--muted);
+      margin: 0 8px;
+    }
+
+    @media (min-width: 820px) {
+      .grid.two {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 620px) {
+      .page {
+        padding: 24px 16px;
+      }
+
+      .topbar {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .card {
+        padding: 24px;
+      }
+
+      .button,
+      .button-secondary {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="topbar">
+      <div class="brand">
+        <img class="logo" src="assets/quantaroute-logo.svg" alt="QuantaRoute atom route pin logo" />
+        <div>
+          <h1>QuantaRoute Developers</h1>
+          <p>API and MCP access for route optimisation agents</p>
+        </div>
+      </div>
+      <a class="button-secondary" href="landing.html">Back to landing</a>
+    </header>
+
+    <section class="card hero">
+      <h2>Build driver-ready route optimisation into your app or AI agent</h2>
+      <p>QuantaRoute turns delivery addresses into an ordered route, estimates distance and fuel savings, creates a Google Maps link, and prepares a WhatsApp-ready driver message.</p>
+      <div class="hero-actions">
+        <a class="button" href="/openapi.json">OpenAPI JSON</a>
+        <a class="button-secondary" href="/llms.txt">LLMs.txt</a>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="apiTitle">
+      <h2 id="apiTitle">Public API</h2>
+      <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route.</p>
+      <p><span class="endpoint">POST /api/optimise-route</span></p>
+
+      <div class="grid two">
+        <article class="mini-card">
+          <h3>Input</h3>
+          <p>Send a start point, 2-20 delivery stops, optional end point, vehicle metadata, and optimisation preference.</p>
+        </article>
+        <article class="mini-card">
+          <h3>Output</h3>
+          <p>Receive ordered stops, distance estimates, estimated saving, Google Maps URL, WhatsApp driver message, and warnings.</p>
+        </article>
+      </div>
+
+      <h3>Example request</h3>
+      <pre><code>{
+  "start": "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
+  "stops": [
+    "Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA",
+    "Royal William Yard, Plymouth, PL1 3RP",
+    "Plymouth Market, Cornwall Street, Plymouth, PL1 1PS",
+    "Plymouth Railway Station, North Road, Plymouth, PL4 6AB"
+  ],
+  "end": "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
+  "vehicle": "van",
+  "optimise_for": "distance"
+}</code></pre>
+
+      <h3>Example response</h3>
+      <pre><code>{
+  "success": true,
+  "input_stop_count": 4,
+  "ordered_stops": [
+    "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
+    "Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA",
+    "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
+    "Royal William Yard, Plymouth, PL1 3RP",
+    "Plymouth Market, Cornwall Street, Plymouth, PL1 1PS",
+    "Plymouth Railway Station, North Road, Plymouth, PL4 6AB"
+  ],
+  "original_distance_km": 8.47,
+  "optimised_distance_km": 8.35,
+  "distance_saved_km": 0.12,
+  "estimated_saving_percent": 1.42,
+  "google_maps_url": "https://www.google.com/maps/dir/...",
+  "whatsapp_message": "Hi Driver! Your optimised route is ready...",
+  "warnings": [
+    "Distance estimates compare route candidates against the address order entered.",
+    "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
+  ]
+}</code></pre>
+    </section>
+
+    <section class="card" aria-labelledby="mcpTitle">
+      <h2 id="mcpTitle">MCP Tool</h2>
+      <p class="lead">QuantaRoute also ships with a local stdio MCP server for AI assistants and business agents.</p>
+      <p><span class="endpoint">optimise_delivery_route</span></p>
+
+      <h3>Local setup</h3>
+      <pre><code>cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm install
+npm run build
+$env:QUANTAROUTE_API_BASE_URL="https://quantaroute.co.uk"
+npm start</code></pre>
+
+      <h3>Example MCP config</h3>
+      <pre><code>{
+  "mcpServers": {
+    "quantaroute": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
+      ],
+      "env": {
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+      }
+    }
+  }
+}</code></pre>
+
+      <p class="note">The MCP tool calls the same <strong>POST /api/optimise-route</strong> endpoint as the public API. It does not duplicate route logic.</p>
+    </section>
+
+    <section class="card" aria-labelledby="docsTitle">
+      <h2 id="docsTitle">Developer Links</h2>
+      <ul class="link-list">
+        <li><a href="/openapi.json">/openapi.json</a> - machine-readable API schema.</li>
+        <li><a href="/llms.txt">/llms.txt</a> - QuantaRoute summary for AI agents and LLMs.</li>
+        <li><a href="mailto:hi@quantaroute.co.uk">hi@quantaroute.co.uk</a> - support and access questions.</li>
+      </ul>
+    </section>
+
+    <section class="card" aria-labelledby="safetyTitle">
+      <h2 id="safetyTitle">Safety and Billing Notes</h2>
+      <p class="note">QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic, road closures, vehicle restrictions, and professional judgement.</p>
+      <p class="note">Stripe checkout is not active yet. QuantaRoute is currently free to test while payments are being prepared.</p>
+    </section>
+
+    <footer class="footer">
+      <a href="index.html">Open the route optimiser</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="landing.html">Back to landing</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="mailto:hi@quantaroute.co.uk">hi@quantaroute.co.uk</a>
+    </footer>
+  </div>
+</body>
+</html>

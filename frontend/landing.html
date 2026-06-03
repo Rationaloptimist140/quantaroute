@@ -284,6 +284,12 @@
       text-decoration: none;
     }
 
+    .pricing-list a {
+      color: var(--accent);
+      font-weight: 700;
+      text-decoration: none;
+    }
+
     .footer span {
       color: var(--muted);
       margin: 0 8px;
@@ -339,6 +345,7 @@
       <div class="hero-actions">
         <a class="button" href="index.html">Try QuantaRoute Free</a>
         <a class="button-secondary" href="#proof">See Example Savings</a>
+        <a class="button-secondary" href="developers.html">Developer docs</a>
       </div>
     </section>
 
@@ -441,9 +448,10 @@
         <article class="mini-card">
           <h3>Available and coming soon</h3>
           <ul class="pricing-list">
+            <li><a href="developers.html">Developer page</a></li>
             <li>POST /api/optimise-route</li>
-            <li>GET /openapi.json</li>
-            <li>GET /llms.txt</li>
+            <li><a href="/openapi.json">GET /openapi.json</a></li>
+            <li><a href="/llms.txt">GET /llms.txt</a></li>
             <li>MCP tool: optimise_delivery_route</li>
           </ul>
         </article>
@@ -477,7 +485,13 @@
 
     <footer class="footer">
       <a href="index.html">Back to the route optimiser</a>
-      <span aria-hidden="true">·</span>
+      <span aria-hidden="true">&middot;</span>
+      <a href="developers.html">Developer docs</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="/openapi.json">OpenAPI</a>
+      <span aria-hidden="true">&middot;</span>
+      <a href="/llms.txt">LLMs.txt</a>
+      <span aria-hidden="true">&middot;</span>
       <a href="mailto:hi@quantaroute.co.uk">hi@quantaroute.co.uk</a>
     </footer>
   </div>

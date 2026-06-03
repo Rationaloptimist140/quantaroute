@@ -53,6 +53,39 @@ Example agent task:
 
 MCP preparation lives in `mcp/server.ts` with the `optimise_delivery_route` tool schema.
 
+## QuantaRoute Agent/API Surface
+
+- Web app: https://quantaroute.co.uk
+- Developer page: https://quantaroute.co.uk/developers.html
+- Public API: `POST /api/optimise-route`
+- OpenAPI JSON: https://quantaroute.co.uk/openapi.json
+- LLM guide: https://quantaroute.co.uk/llms.txt
+- MCP tool: `optimise_delivery_route`
+
+Safety notes:
+
+- Distance and fuel savings are estimates.
+- QuantaRoute does not guarantee the mathematically shortest route in all cases.
+- Drivers must follow road laws, live traffic conditions, vehicle restrictions, and professional judgement.
+- Stripe checkout is not active yet; public testing remains free while payments are prepared.
+
+Local API test:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\backend
+python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+MCP local test:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm install
+npm run build
+$env:QUANTAROUTE_API_BASE_URL="http://127.0.0.1:8000"
+npm run test:mcp-call
+```
+
 ## MCP Server
 
 Install and build:

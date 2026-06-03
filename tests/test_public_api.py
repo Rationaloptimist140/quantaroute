@@ -89,6 +89,30 @@ def test_over_20_stops_rejected():
     assert data["error"]["code"] == "TOO_MANY_STOPS"
 
 
+def test_extremely_long_address_rejected():
+    payload = sample_payload()
+    payload["stops"][0] = "A" * 241
+
+    response = client.post("/api/optimise-route", json=payload)
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "ADDRESS_TOO_LONG"
+
+
+def test_duplicate_only_stop_list_rejected():
+    payload = sample_payload()
+    payload["stops"] = ["Royal William Yard, Plymouth", "Royal William Yard, Plymouth"]
+
+    response = client.post("/api/optimise-route", json=payload)
+
+    assert response.status_code == 400
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "INVALID_STOPS"
+
+
 def test_failed_geocoding_returns_clear_error(monkeypatch):
     async def fake_optimise_route(**_kwargs):
         raise main.RouteGeocodingError(["Bad Stop"])

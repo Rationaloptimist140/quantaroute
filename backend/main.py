@@ -66,6 +66,11 @@ from database import get_recent_routes, init_db, record_allowed_route_use, save_
 
 init_db()
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
+MAX_PUBLIC_ADDRESS_LENGTH = 240
+
+# TODO: Add future X-API-Key header support for production API consumers.
+# TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
+# TODO: Add future per-route billing once Stripe checkout is active.
 
 
 @app.exception_handler(RequestValidationError)
@@ -443,6 +448,14 @@ def clean_public_stops(stops: list[str]) -> tuple[list[str], list[str]]:
     return clean_stops, warnings
 
 
+def too_long_addresses(addresses: list[str]) -> list[str]:
+    return [
+        address
+        for address in addresses
+        if len(clean_route_address(address)) > MAX_PUBLIC_ADDRESS_LENGTH
+    ]
+
+
 def public_route_warnings(
     request_data: PublicOptimiseRouteRequest,
     result: dict,
@@ -637,6 +650,9 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
     clean_start = clean_route_address(route_request.start)
     clean_end = clean_route_address(route_request.end or "")
     clean_stops, warnings = clean_public_stops(route_request.stops)
+    long_addresses = too_long_addresses(
+        [route_request.start, route_request.end or "", *route_request.stops]
+    )
 
     if not clean_start:
         return public_api_error(
@@ -646,12 +662,29 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
             ["Provide a depot, home base, town, postcode, or first pickup point."],
         )
 
+    if long_addresses:
+        return public_api_error(
+            400,
+            "ADDRESS_TOO_LONG",
+            f"Addresses must be {MAX_PUBLIC_ADDRESS_LENGTH} characters or fewer.",
+            [
+                {
+                    "address": address[:80],
+                    "length": len(clean_route_address(address)),
+                }
+                for address in long_addresses
+            ],
+        )
+
     if len(clean_stops) < 2:
         return public_api_error(
             400,
             "INVALID_STOPS",
-            "At least two valid delivery stops are required.",
-            warnings,
+            "At least two unique valid delivery stops are required.",
+            warnings
+            or [
+                "Add at least two different delivery stops. Do not use only empty or duplicate stops."
+            ],
         )
 
     if len(clean_stops) > 20:

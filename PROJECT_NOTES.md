@@ -84,6 +84,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `frontend/landing.html` - updated with API-first/product positioning, 20-stop Plymouth proof section, audience list, simplified how-it-works steps, agent-ready API/MCP section, safer savings language, and current pricing/payment copy.
 - `frontend/landing.html` - links to `developers.html`, `/openapi.json`, and `/llms.txt` for public developer/agent access.
 - `frontend/developers.html` - public static developer page explaining `POST /api/optimise-route`, MCP tool `optimise_delivery_route`, API request/response examples, local MCP setup, estimated-savings safety note, and current free-to-test/Stripe-not-active status.
+- `frontend/developers.html` - polished developer subtitle, added response explanation, duplicate depot warning, and public status section for API/MCP/payments/PDF/time/vehicle routing.
+- `examples/` - added a Plymouth API request JSON, live PowerShell curl example, and Claude Desktop/Cursor/Codex-style MCP config.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
@@ -116,6 +118,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
 - Frontend results now show a collapsed "Benchmark details" section when benchmark API fields are available.
 - Public API endpoint `POST /api/optimise-route` now returns structured success JSON and structured `success: false` error JSON for invalid route input, over-20-stop requests, payment/trial blocks, and geocoding/optimisation failures.
+- Public API has non-blocking future TODOs for `X-API-Key`, rate limiting, and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
 - `/developers.html` is served as a public developer page and linked from the landing page.

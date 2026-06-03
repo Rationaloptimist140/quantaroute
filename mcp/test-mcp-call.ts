@@ -31,18 +31,27 @@ if (!tools.tools.some((tool) => tool.name === "optimise_delivery_route")) {
 const result = await client.callTool({
   name: "optimise_delivery_route",
   arguments: {
-    start: "Plymouth, UK",
+    start: "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
     stops: [
       "Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA",
       "Royal William Yard, Plymouth, PL1 3RP",
       "Plymouth Market, Cornwall Street, Plymouth, PL1 1PS",
-      "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
+      "The Box, Tavistock Place, Plymouth, PL4 8AX",
     ],
-    end: "Plymouth, UK",
+    end: "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
     vehicle: "van",
     optimise_for: "distance",
   },
 });
 
 console.log(JSON.stringify(result, null, 2));
+const content = result.content as Array<{ type: string; text?: string }>;
+const firstContent = content[0];
+if (firstContent.type !== "text") {
+  throw new Error("Expected text content from MCP tool");
+}
+const parsed = JSON.parse(firstContent.text || "{}");
+if (!parsed.success) {
+  throw new Error(`MCP tool returned failure: ${firstContent.text}`);
+}
 await client.close();

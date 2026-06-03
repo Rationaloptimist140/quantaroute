@@ -278,7 +278,7 @@
         <img class="logo" src="assets/quantaroute-logo.svg" alt="QuantaRoute atom route pin logo" />
         <div>
           <h1>QuantaRoute Developers</h1>
-          <p>API and MCP access for route optimisation agents</p>
+          <p>API and MCP access for AI agents, courier tools, and delivery workflows.</p>
         </div>
       </div>
       <a class="button-secondary" href="landing.html">Back to landing</a>
@@ -326,6 +326,7 @@
       <p class="note">If your start or end address is also included inside stops, it may appear more than once in the route. For clean results, do not duplicate the depot/start/end inside the stops list.</p>
 
       <h3>Example response</h3>
+      <p class="note">ordered_stops includes the start address, optimised delivery stops, and end address when provided.</p>
       <pre><code>{
   "success": true,
   "input_stop_count": 4,
@@ -348,6 +349,36 @@
     "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
   ]
 }</code></pre>
+    </section>
+
+    <section class="card" aria-labelledby="statusTitle">
+      <h2 id="statusTitle">Public Status</h2>
+      <div class="grid two">
+        <article class="mini-card">
+          <h3>API status</h3>
+          <p>Live</p>
+        </article>
+        <article class="mini-card">
+          <h3>MCP status</h3>
+          <p>Local stdio server available</p>
+        </article>
+        <article class="mini-card">
+          <h3>Payments</h3>
+          <p>Not active yet</p>
+        </article>
+        <article class="mini-card">
+          <h3>PDF route sheet</h3>
+          <p>Planned</p>
+        </article>
+        <article class="mini-card">
+          <h3>Time optimisation</h3>
+          <p>Planned</p>
+        </article>
+        <article class="mini-card">
+          <h3>Vehicle-specific routing</h3>
+          <p>Planned</p>
+        </article>
+      </div>
     </section>
 
     <section class="card" aria-labelledby="mcpTitle">
@@ -392,6 +423,7 @@ npm start</code></pre>
     <section class="card" aria-labelledby="safetyTitle">
       <h2 id="safetyTitle">Safety and Billing Notes</h2>
       <p class="note">QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic, road closures, vehicle restrictions, and professional judgement.</p>
+      <p class="note">Do not include depot/start/end inside stops unless it is a real delivery stop.</p>
       <p class="note">Stripe checkout is not active yet. QuantaRoute is currently free to test while payments are being prepared.</p>
     </section>
 

@@ -13,9 +13,27 @@ import numpy as np
 
 from geocoder import geocode_addresses
 from road_matrix import build_distance_matrix, is_valid_coordinate
-from qaoa import calculate_total_distance, estimate_fuel_saving, nearest_neighbour_route
+from qaoa import estimate_fuel_saving, nearest_neighbour_route
 
 logger = logging.getLogger(__name__)
+
+GEOCODING_HELP_MESSAGE = "Could not find this address. Try adding postcode, city, or full business address."
+
+
+class RouteGeocodingError(ValueError):
+    def __init__(self, failed_addresses: list[str]):
+        self.failed_addresses = failed_addresses
+        failed_text = ", ".join(failed_addresses)
+        super().__init__(f"{GEOCODING_HELP_MESSAGE} Failed: {failed_text}")
+
+    def as_details(self) -> list[dict[str, str]]:
+        return [
+            {
+                "address": address,
+                "message": GEOCODING_HELP_MESSAGE,
+            }
+            for address in self.failed_addresses
+        ]
 
 
 def clean_route_address(address: str) -> str:
@@ -81,6 +99,13 @@ def select_route_order(
     return nearest_neighbour_route(matrix), "nearest-neighbour heuristic"
 
 
+def calculate_path_distance(order: list[int], matrix: np.ndarray) -> float:
+    total = 0.0
+    for i in range(len(order) - 1):
+        total += matrix[order[i]][order[i + 1]]
+    return round(total, 2)
+
+
 async def optimise_route(
     addresses: list[str],
     driver_name: str = "Driver",
@@ -105,10 +130,26 @@ async def optimise_route(
     failed = [addresses[i] for i, c in enumerate(coords) if not is_valid_coordinate(c)]
     if failed:
         print(f"  Warning: Could not geocode: {failed}")
+        raise RouteGeocodingError(failed)
 
     valid_indices = [i for i, c in enumerate(coords) if is_valid_coordinate(c)]
     valid_coords = [coords[i] for i in valid_indices]
     valid_addresses = [addresses[i] for i in valid_indices]
+
+    boundary_addresses = [
+        address for address in [clean_start_address, clean_end_address] if address
+    ]
+    boundary_coords = []
+    if boundary_addresses:
+        boundary_coords = await geocode_addresses(boundary_addresses)
+        failed_boundaries = [
+            boundary_addresses[i]
+            for i, coord in enumerate(boundary_coords)
+            if not is_valid_coordinate(coord)
+        ]
+        if failed_boundaries:
+            print(f"  Warning: Could not geocode route boundary: {failed_boundaries}")
+            raise RouteGeocodingError(failed_boundaries)
 
     if len(valid_coords) < 2:
         failed_text = ", ".join(failed[:5]) if failed else "the provided stops"
@@ -125,22 +166,63 @@ async def optimise_route(
 
     print(f"\n[3/4] Running route optimisation...")
     original_order = list(range(len(valid_coords)))
-    original_order_distance = calculate_total_distance(original_order, matrix)
     nn_order = nearest_neighbour_route(matrix)
-    nearest_neighbour_distance = calculate_total_distance(nn_order, matrix)
     algorithm_name = describe_route_algorithm(len(valid_coords))
 
     optimised_order, algorithm_used = select_route_order(matrix, len(addresses))
-    optimised_dist = calculate_total_distance(optimised_order, matrix)
-    optimiser_dist = optimised_dist
-    optimiser_vs_original = estimate_fuel_saving(original_order_distance, optimiser_dist)
-    optimiser_vs_nn = estimate_fuel_saving(nearest_neighbour_distance, optimiser_dist)
+
+    start_coord = boundary_coords[0] if clean_start_address else None
+    end_coord = None
+    if clean_end_address:
+        end_coord = boundary_coords[-1]
+
+    combined_coords = []
+    start_index = None
+    if start_coord:
+        start_index = len(combined_coords)
+        combined_coords.append(start_coord)
+
+    delivery_offset = len(combined_coords)
+    combined_coords.extend(valid_coords)
+
+    end_index = None
+    if end_coord:
+        end_index = len(combined_coords)
+        combined_coords.append(end_coord)
+    elif start_index is not None and return_to_start:
+        end_index = start_index
+
+    combined_matrix = build_distance_matrix(combined_coords)
+
+    def delivery_path(order: list[int]) -> list[int]:
+        path = []
+        if start_index is not None:
+            path.append(start_index)
+        path.extend(delivery_offset + index for index in order)
+        if end_index is not None:
+            path.append(end_index)
+        return path
+
+    original_order_distance = calculate_path_distance(
+        delivery_path(original_order),
+        combined_matrix,
+    )
+    nearest_neighbour_distance = calculate_path_distance(
+        delivery_path(nn_order),
+        combined_matrix,
+    )
+    optimised_dist = calculate_path_distance(
+        delivery_path(optimised_order),
+        combined_matrix,
+    )
+    optimiser_vs_original = estimate_fuel_saving(original_order_distance, optimised_dist)
+    optimiser_vs_nn = estimate_fuel_saving(nearest_neighbour_distance, optimised_dist)
 
     print(f"  Algorithm selected: {algorithm_name}")
     print(f"  Algorithm used:     {algorithm_used}")
     print(f"  Input order distance:       {original_order_distance} km")
     print(f"  Nearest-neighbour distance: {nearest_neighbour_distance} km")
-    print(f"  Final selected distance:    {optimiser_dist} km")
+    print(f"  Final selected distance:    {optimised_dist} km")
     print(f"  Optimiser vs input order:   {optimiser_vs_original}%")
     print(f"  Optimiser vs nearest-neighbour: {optimiser_vs_nn}%")
 

@@ -53,6 +53,48 @@ Example agent task:
 
 MCP preparation lives in `mcp/server.ts` with the `optimise_delivery_route` tool schema.
 
+## MCP Server
+
+Install and build:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm install
+npm run build
+```
+
+Run the stdio MCP server:
+
+```powershell
+$env:QUANTAROUTE_API_BASE_URL="https://quantaroute.co.uk"
+npm start
+```
+
+For local backend testing:
+
+```powershell
+$env:QUANTAROUTE_API_BASE_URL="http://127.0.0.1:8000"
+npm start
+```
+
+MCP config example:
+
+```json
+{
+  "mcpServers": {
+    "quantaroute": {
+      "command": "node",
+      "args": [
+        "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
+      ],
+      "env": {
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+      }
+    }
+  }
+}
+```
+
 ## Pricing
 
 First month free for testing. Then £1.99 per optimised route. No subscription, no monthly fee, and payments are currently being prepared.
@@ -76,3 +118,20 @@ python -m uvicorn main:app --host 127.0.0.1 --port 8000
 ```
 
 Then visit `http://localhost:8000`.
+
+## Tests
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
+```
+
+MCP checks:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm run build
+npm run test:api-call
+npm run test:mcp-call
+```

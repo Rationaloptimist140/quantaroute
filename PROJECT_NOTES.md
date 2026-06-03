@@ -26,6 +26,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Browser-first: no app download, no installation, no account setup required for the basic route flow.
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains an experimental/internal optimisation module, not the live route-selection promise.
 - API-first promise: agents can submit a start point, 2-20 delivery stops, optional end point, vehicle, and optimisation preference, then receive ordered stops, benchmark distances, estimated saving, a Google Maps URL, WhatsApp message, and warnings.
+- MCP promise: a runnable local stdio MCP server now exposes `optimise_delivery_route` and calls the same public FastAPI endpoint.
 - The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
@@ -68,11 +69,14 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, route-history saving for API requests, and a health-check build marker.
+- `backend/main.py` - public API, CSV upload, and web optimiser now return clear structured geocoding errors that identify the failed address and say: "Could not find this address. Try adding postcode, city, or full business address."
 - `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, Nominatim GB fallback, and Photon fallback for commercial/place-name addresses.
 - `backend/services/geocoder.py` - Nominatim requests now include the QuantaRoute contact email in the User-Agent so the hosted service is identifiable to public geocoding infrastructure.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
 - `backend/services/route_builder.py` - extended shared Google Maps URL building to support optional end addresses and added a reusable WhatsApp message helper for the public API/MCP layer.
+- `backend/services/route_builder.py` - reported original, nearest-neighbour, and final route distances now include optional start and end/return-to-start points instead of only delivery stops.
+- `frontend/index.html` - displays structured geocoding failures with the exact failed stop and helpful postcode/full-address guidance.
 - `backend/services/route_sheet.py` - dependency-free plain-text route sheet stub for future downloadable route sheet/PDF work.
 - `backend/services/road_matrix.py` - OSRM/Haversine distance matrix builder with coordinate validation and fallback handling for incomplete OSRM responses.
 - `frontend/index.html` - clean mobile-first Premium White route optimiser tool with live Render API URL, driver/start/return-to-start/stops inputs, multi-column CSV upload cleanup, results, Google Maps and WhatsApp actions, collapsed benchmark details, route history, and subtle `About QuantaRoute`/contact links.
@@ -82,8 +86,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
-- `mcp/server.ts` - MCP-ready TypeScript tool schema and wrapper for `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic.
+- `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route` and calling the FastAPI public API instead of duplicating optimisation logic.
+- `mcp/package.json`, `mcp/package-lock.json`, `mcp/tsconfig.json`, `mcp/README.md`, `mcp/test-api-call.ts`, `mcp/test-mcp-call.ts` - package scripts, build config, MCP config examples, and direct/MCP call tests.
 - `README.md` - refreshed API-first documentation, endpoint example, agent-ready direction, pricing, and safety language.
+- `requirements-dev.txt` - Python dev/test dependencies.
+- `tests/` - pytest coverage for the public API success/error/docs paths and start/end distance reporting.
 
 ## Bugs Fixed
 
@@ -110,17 +117,19 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
 - Public geocoding requests now use an identifiable User-Agent with the support email and a Photon fallback to reduce hosted commercial-address geocoder failure risk.
+- Geocoding failures now identify the failed address instead of silently omitting it from a successful route.
+- Reported distance metrics now include start/depot and optional end/return-to-start points when provided.
+- MCP can now be run locally and tested with a real MCP client/server call.
+- Formal pytest coverage now checks public API success, invalid JSON, over-20-stop rejection, failed geocoding, Google Maps URL, WhatsApp message, `/llms.txt`, `/openapi.json`, and route-builder start/end distance reporting.
 
 ## Remaining Issues
 
 - Route quality depends on public external services: `api.postcodes.io`, Nominatim, and OSRM.
 - Some postcode/outcode results may be approximate, especially terminated or outward-only inputs.
 - Fuel saving percent is based on the current naive route comparison and can be low for already efficient input order.
-- Benchmark distances currently compare the delivery stop order only. The optional start/depot address is included in Google Maps/WhatsApp links but is not geocoded into the benchmark distance matrix.
-- The new public API accepts `start` and optional `end` for Google Maps/agent output, but distance estimates still compare delivery-stop order only. API warnings state this explicitly.
+- Name-only commercial stops can still fail in hosted geocoding; full business addresses with UK postcodes are much more reliable.
 - `optimise_for = "time"` is accepted for API compatibility, but current routing still optimises for distance and returns a warning.
 - `vehicle` is accepted for API compatibility, but current estimates use the existing van-style routing assumptions and return a warning for non-van values.
-- MCP support is prepared as a TypeScript wrapper/schema in `mcp/server.ts`; a full packaged MCP runtime/server setup is still a follow-up.
 - PDF route sheet support is a dependency-free text stub only; full PDF generation is still a follow-up.
 - Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
@@ -208,6 +217,32 @@ Invoke-RestMethod -Method Post `
   -Uri "https://quantaroute.co.uk/api/optimise-route" `
   -ContentType "application/json" `
   -Body $body
+```
+
+MCP install/build/run:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm install
+npm run build
+$env:QUANTAROUTE_API_BASE_URL="https://quantaroute.co.uk"
+npm start
+```
+
+MCP tests:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute\mcp
+npm run test:api-call
+npm run test:mcp-call
+```
+
+Python tests:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+python -m pip install -r requirements-dev.txt
+python -m pytest -q
 ```
 
 Check frontend HTML is current:

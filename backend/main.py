@@ -23,6 +23,8 @@ from pydantic import BaseModel, Field
 import logging
 
 from services.route_builder import (
+    GEOCODING_HELP_MESSAGE,
+    RouteGeocodingError,
     build_google_maps_url,
     build_whatsapp_message,
     clean_route_address,
@@ -456,7 +458,7 @@ def public_route_warnings(
             "Some stops could not be geocoded and were excluded: "
             + ", ".join(result["failed_addresses"])
         )
-    warnings.append("Distance estimates compare delivery stop order against the order entered.")
+    warnings.append("Distance estimates compare route candidates against the address order entered.")
     warnings.append(
         "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
     )
@@ -575,12 +577,24 @@ async def upload_csv(
     usage_response = enforce_usage_limit(request)
     if usage_response:
         return usage_response
-    result = await optimise_route(
-        addresses=addresses,
-        driver_name=driver_name,
-        start_address=start_address,
-        return_to_start=return_to_start,
-    )
+    try:
+        result = await optimise_route(
+            addresses=addresses,
+            driver_name=driver_name,
+            start_address=start_address,
+            return_to_start=return_to_start,
+        )
+    except RouteGeocodingError as e:
+        logger.warning(f"CSV optimisation geocoding failed: {e.failed_addresses}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "GEOCODING_FAILED",
+                "message": GEOCODING_HELP_MESSAGE,
+                "failed_addresses": e.failed_addresses,
+                "details": e.as_details(),
+            },
+        )
     record_route_history(driver_name=driver_name, result=result)
     return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
 
@@ -660,6 +674,14 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
             return_to_start=False,
             end_address=clean_end or None,
         )
+    except RouteGeocodingError as e:
+        logger.warning(f"Public API geocoding failed: {e.failed_addresses}")
+        return public_api_error(
+            400,
+            "GEOCODING_FAILED",
+            GEOCODING_HELP_MESSAGE,
+            e.as_details(),
+        )
     except ValueError as e:
         logger.warning(f"Public API optimisation validation failed: {e}")
         return public_api_error(
@@ -737,6 +759,17 @@ async def route_optimise(route_request: RouteRequest, request: Request):
         )
         record_route_history(driver_name=route_request.driver_name, result=result)
         return RouteResponse(**{k: result[k] for k in RouteResponse.model_fields})
+    except RouteGeocodingError as e:
+        logger.warning(f"Optimisation geocoding failed: {e.failed_addresses}")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "GEOCODING_FAILED",
+                "message": GEOCODING_HELP_MESSAGE,
+                "failed_addresses": e.failed_addresses,
+                "details": e.as_details(),
+            },
+        )
     except ValueError as e:
         logger.warning(f"Optimisation validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))

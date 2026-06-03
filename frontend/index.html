@@ -1057,6 +1057,35 @@
       message.classList.remove("hidden");
     }
 
+    function formatApiError(data) {
+      const detail = data && data.detail;
+      if (detail && typeof detail === "object") {
+        const failedAddresses = Array.isArray(detail.failed_addresses) ? detail.failed_addresses : [];
+        const helper = detail.message || "Could not find this address. Try adding postcode, city, or full business address.";
+        if (failedAddresses.length) {
+          return `${helper} Failed stop${failedAddresses.length === 1 ? "" : "s"}: ${failedAddresses.join("; ")}`;
+        }
+        return helper;
+      }
+
+      if (data && data.error && typeof data.error === "object") {
+        const details = Array.isArray(data.error.details) ? data.error.details : [];
+        const failedAddresses = details
+          .map((item) => item && item.address)
+          .filter(Boolean);
+        if (failedAddresses.length) {
+          return `${data.error.message} Failed stop${failedAddresses.length === 1 ? "" : "s"}: ${failedAddresses.join("; ")}`;
+        }
+        return data.error.message || "The optimisation service could not complete the route.";
+      }
+
+      if (typeof detail === "string") {
+        return detail;
+      }
+
+      return "The optimisation service could not complete the route.";
+    }
+
     function showUpgradeMessage(upgradeUrl) {
       message.innerHTML = "";
       const panel = document.createElement("div");
@@ -1285,7 +1314,7 @@
             showUpgradeMessage(data.upgrade_url || "/pricing");
             return;
           }
-          throw new Error(data.detail || "The optimisation service could not complete the route.");
+          throw new Error(formatApiError(data));
         }
 
         renderResults(data);

@@ -1,11 +1,7 @@
-/**
- * QuantaRoute MCP-ready tool wrapper.
- *
- * This module keeps the agent tool contract in TypeScript while reusing the
- * production FastAPI endpoint. A full MCP runtime can import
- * `optimiseDeliveryRouteTool` and `optimiseDeliveryRoute` instead of
- * duplicating optimisation logic.
- */
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { pathToFileURL } from "node:url";
+import { z } from "zod";
 
 export type OptimiseFor = "distance" | "time";
 
@@ -103,4 +99,60 @@ export async function optimiseDeliveryRoute(
   }
 
   return data;
+}
+
+export function createQuantaRouteMcpServer() {
+  const server = new McpServer({
+    name: "quantaroute",
+    version: "1.0.0",
+  });
+
+  server.tool(
+    optimiseDeliveryRouteTool.name,
+    optimiseDeliveryRouteTool.description,
+    {
+      start: z
+        .string()
+        .min(1)
+        .describe("Depot, home base, town, postcode, or first pickup point."),
+      stops: z
+        .array(z.string().min(1))
+        .min(2)
+        .max(20)
+        .describe("Delivery addresses or appointment stops to optimise."),
+      end: z
+        .string()
+        .min(1)
+        .optional()
+        .describe("Optional final destination. Omit to finish at the final optimised stop."),
+      vehicle: z.string().optional().default("van"),
+      optimise_for: z.enum(["distance", "time"]).optional().default("distance"),
+    },
+    async (input) => {
+      const result = await optimiseDeliveryRoute(input);
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result, null, 2),
+          },
+        ],
+      };
+    },
+  );
+
+  return server;
+}
+
+async function main() {
+  const server = createQuantaRouteMcpServer();
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+}
+
+if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error("QuantaRoute MCP server failed:", error);
+    process.exit(1);
+  });
 }

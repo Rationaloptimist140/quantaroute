@@ -6,3 +6,7 @@ __pycache__/
 *.pyc
 .env
 quantaroute.db
+node_modules/
+dist/
+mcp/node_modules/
+mcp/dist/

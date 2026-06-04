@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "api-key-foundation-2026-06-04"
+APP_BUILD = "namespaced-db-tables-2026-06-04"
 
 app = FastAPI(
     title="QuantaRoute API",

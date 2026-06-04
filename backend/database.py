@@ -26,6 +26,10 @@ BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "quantaroute.db"
 _SCHEMA_READY_FOR: str | None = None
 
+ROUTE_HISTORY_TABLE = "quantaroute_route_history"
+API_KEYS_TABLE = "quantaroute_api_keys"
+USAGE_EVENTS_TABLE = "quantaroute_usage_events"
+
 
 ROUTE_SELECT_COLUMNS = """
     id,
@@ -206,7 +210,7 @@ def init_sqlite() -> None:
     with get_sqlite_connection() as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS routes (
+            CREATE TABLE IF NOT EXISTS quantaroute_route_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 driver_name TEXT,
                 stops_count INTEGER,
@@ -220,10 +224,10 @@ def init_sqlite() -> None:
             """
         )
         for column_name, column_definition in SQLITE_ROUTE_COLUMNS:
-            ensure_sqlite_column(conn, "routes", column_name, column_definition)
+            ensure_sqlite_column(conn, ROUTE_HISTORY_TABLE, column_name, column_definition)
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS quantaroute_usage_events (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 identifier TEXT UNIQUE,
                 first_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -234,7 +238,7 @@ def init_sqlite() -> None:
         )
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS api_keys (
+            CREATE TABLE IF NOT EXISTS quantaroute_api_keys (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 key_hash TEXT UNIQUE NOT NULL,
                 label TEXT NOT NULL,
@@ -254,7 +258,7 @@ def init_postgres() -> None:
     with get_postgres_connection() as conn:
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS routes (
+            CREATE TABLE IF NOT EXISTS quantaroute_route_history (
                 id BIGSERIAL PRIMARY KEY,
                 driver_name TEXT,
                 stops_count INTEGER,
@@ -268,10 +272,10 @@ def init_postgres() -> None:
             """
         )
         for column_name, column_definition in POSTGRES_ROUTE_COLUMNS:
-            ensure_postgres_column(conn, "routes", column_name, column_definition)
+            ensure_postgres_column(conn, ROUTE_HISTORY_TABLE, column_name, column_definition)
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS users (
+            CREATE TABLE IF NOT EXISTS quantaroute_usage_events (
                 id BIGSERIAL PRIMARY KEY,
                 identifier TEXT UNIQUE,
                 first_used TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
@@ -282,7 +286,7 @@ def init_postgres() -> None:
         )
         conn.execute(
             """
-            CREATE TABLE IF NOT EXISTS api_keys (
+            CREATE TABLE IF NOT EXISTS quantaroute_api_keys (
                 id BIGSERIAL PRIMARY KEY,
                 key_hash TEXT UNIQUE NOT NULL,
                 label TEXT NOT NULL,
@@ -334,7 +338,7 @@ def create_api_key(
         with get_postgres_connection() as conn:
             row = conn.execute(
                 """
-                INSERT INTO api_keys (
+                INSERT INTO quantaroute_api_keys (
                     key_hash,
                     label,
                     source_label,
@@ -349,7 +353,7 @@ def create_api_key(
         with get_sqlite_connection() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO api_keys (
+                INSERT INTO quantaroute_api_keys (
                     key_hash,
                     label,
                     source_label,
@@ -363,7 +367,7 @@ def create_api_key(
             row = conn.execute(
                 """
                 SELECT id, label, source_label, monthly_limit, created_at
-                FROM api_keys
+                FROM quantaroute_api_keys
                 WHERE id = ?
                 """,
                 (cursor.lastrowid,),
@@ -381,7 +385,7 @@ def get_api_key_by_hash(key_hash: str) -> dict[str, Any] | None:
             row = conn.execute(
                 f"""
                 SELECT {API_KEY_SELECT_COLUMNS}
-                FROM api_keys
+                FROM quantaroute_api_keys
                 WHERE key_hash = %s
                 """,
                 (key_hash,),
@@ -391,7 +395,7 @@ def get_api_key_by_hash(key_hash: str) -> dict[str, Any] | None:
             row = conn.execute(
                 f"""
                 SELECT {API_KEY_SELECT_COLUMNS}
-                FROM api_keys
+                FROM quantaroute_api_keys
                 WHERE key_hash = ?
                 """,
                 (key_hash,),
@@ -432,7 +436,7 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
         with get_postgres_connection() as conn:
             row = conn.execute(
                 f"""
-                UPDATE api_keys
+                UPDATE quantaroute_api_keys
                 SET last_used_at = %s,
                     usage_count_current_month = %s
                 WHERE id = %s
@@ -444,7 +448,7 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
         with get_sqlite_connection() as conn:
             conn.execute(
                 """
-                UPDATE api_keys
+                UPDATE quantaroute_api_keys
                 SET last_used_at = ?,
                     usage_count_current_month = ?
                 WHERE id = ?
@@ -455,7 +459,7 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
             row = conn.execute(
                 f"""
                 SELECT {API_KEY_SELECT_COLUMNS}
-                FROM api_keys
+                FROM quantaroute_api_keys
                 WHERE id = ?
                 """,
                 (record["id"],),
@@ -576,7 +580,7 @@ def save_route(
         with get_postgres_connection() as conn:
             row = conn.execute(
                 f"""
-                INSERT INTO routes ({", ".join(columns)})
+                INSERT INTO {ROUTE_HISTORY_TABLE} ({", ".join(columns)})
                 VALUES ({placeholders})
                 RETURNING id
                 """,
@@ -588,7 +592,7 @@ def save_route(
     with get_sqlite_connection() as conn:
         cursor = conn.execute(
             f"""
-            INSERT INTO routes ({", ".join(columns)})
+            INSERT INTO {ROUTE_HISTORY_TABLE} ({", ".join(columns)})
             VALUES ({placeholders})
             """,
             values,
@@ -677,7 +681,7 @@ def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
             rows = conn.execute(
                 f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
-                FROM routes
+                FROM {ROUTE_HISTORY_TABLE}
                 ORDER BY created_at DESC, id DESC
                 LIMIT %s
                 """,
@@ -688,7 +692,7 @@ def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
             rows = conn.execute(
                 f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
-                FROM routes
+                FROM {ROUTE_HISTORY_TABLE}
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 """,
@@ -705,7 +709,7 @@ def get_route_by_id(route_id: int) -> dict[str, Any] | None:
             row = conn.execute(
                 f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
-                FROM routes
+                FROM {ROUTE_HISTORY_TABLE}
                 WHERE id = %s
                 """,
                 (route_id,),
@@ -715,7 +719,7 @@ def get_route_by_id(route_id: int) -> dict[str, Any] | None:
             row = conn.execute(
                 f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
-                FROM routes
+                FROM {ROUTE_HISTORY_TABLE}
                 WHERE id = ?
                 """,
                 (route_id,),
@@ -728,13 +732,13 @@ def get_or_create_user(identifier: str) -> dict[str, Any]:
     if using_postgres():
         with get_postgres_connection() as conn:
             conn.execute(
-                "INSERT INTO users (identifier) VALUES (%s) ON CONFLICT (identifier) DO NOTHING",
+                f"INSERT INTO {USAGE_EVENTS_TABLE} (identifier) VALUES (%s) ON CONFLICT (identifier) DO NOTHING",
                 (identifier,),
             )
             row = conn.execute(
-                """
+                f"""
                 SELECT id, identifier, first_used, route_count, is_paying
-                FROM users
+                FROM {USAGE_EVENTS_TABLE}
                 WHERE identifier = %s
                 """,
                 (identifier,),
@@ -742,14 +746,14 @@ def get_or_create_user(identifier: str) -> dict[str, Any]:
     else:
         with get_sqlite_connection() as conn:
             conn.execute(
-                "INSERT OR IGNORE INTO users (identifier) VALUES (?)",
+                f"INSERT OR IGNORE INTO {USAGE_EVENTS_TABLE} (identifier) VALUES (?)",
                 (identifier,),
             )
             conn.commit()
             row = conn.execute(
-                """
+                f"""
                 SELECT id, identifier, first_used, route_count, is_paying
-                FROM users
+                FROM {USAGE_EVENTS_TABLE}
                 WHERE identifier = ?
                 """,
                 (identifier,),
@@ -784,13 +788,13 @@ def record_allowed_route_use(identifier: str) -> tuple[bool, dict[str, Any]]:
     if using_postgres():
         with get_postgres_connection() as conn:
             conn.execute(
-                "UPDATE users SET route_count = route_count + 1 WHERE identifier = %s",
+                f"UPDATE {USAGE_EVENTS_TABLE} SET route_count = route_count + 1 WHERE identifier = %s",
                 (identifier,),
             )
     else:
         with get_sqlite_connection() as conn:
             conn.execute(
-                "UPDATE users SET route_count = route_count + 1 WHERE identifier = ?",
+                f"UPDATE {USAGE_EVENTS_TABLE} SET route_count = route_count + 1 WHERE identifier = ?",
                 (identifier,),
             )
             conn.commit()

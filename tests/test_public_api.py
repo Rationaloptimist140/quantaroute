@@ -129,7 +129,10 @@ def test_public_api_inactive_api_key_rejected(monkeypatch, tmp_path):
     api_key = create_api_key("Inactive Client")
     key_hash = database.hash_api_key(api_key["api_key"])
     with database.get_sqlite_connection() as conn:
-        conn.execute("UPDATE api_keys SET is_active = 0 WHERE key_hash = ?", (key_hash,))
+        conn.execute(
+            f"UPDATE {database.API_KEYS_TABLE} SET is_active = 0 WHERE key_hash = ?",
+            (key_hash,),
+        )
         conn.commit()
 
     response = client.post(

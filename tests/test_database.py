@@ -74,7 +74,7 @@ def test_api_key_creation_stores_hash_only(tmp_path, monkeypatch):
 
     with database.get_sqlite_connection() as conn:
         row = conn.execute(
-            "SELECT key_hash, label, monthly_limit FROM api_keys WHERE key_hash = ?",
+            f"SELECT key_hash, label, monthly_limit FROM {database.API_KEYS_TABLE} WHERE key_hash = ?",
             (key_hash,),
         ).fetchone()
 

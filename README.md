@@ -28,6 +28,12 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 
 POST `/api/optimise-route`
 
+Optional during public testing:
+
+```text
+X-API-Key: qr_your_key_here
+```
+
 ```json
 {
   "start": "Plymouth, UK",
@@ -44,6 +50,28 @@ POST `/api/optimise-route`
 ```
 
 The endpoint returns ordered stops, original and optimised distance estimates, distance saved, estimated saving percentage, a Google Maps URL, a WhatsApp driver message, printable route sheet URL, and warnings.
+
+When a valid API key is supplied, the response can include `api_client`,
+`usage_count_current_month`, and `monthly_limit`. Invalid or inactive keys are
+rejected with structured `401` JSON. Requests without a key still work during
+public testing.
+
+## API Keys
+
+API keys are optional while QuantaRoute is free to test. They are being prepared
+for future paid API access, rate limits, and per-route billing. Raw keys are not
+stored; the backend stores a SHA-256 hash.
+
+Create a local/dev key:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+python scripts\create_api_key.py --label "Courier Bot" --monthly-limit 1000 --source-label courier_bot
+```
+
+To create a key in production Postgres, set `DATABASE_URL` in the shell running
+the script, or run the same helper in an environment where `DATABASE_URL` points
+at the production database.
 
 ## Agent-Ready Direction
 
@@ -64,6 +92,7 @@ MCP preparation lives in `mcp/server.ts` with the `optimise_delivery_route` tool
 - OpenAPI JSON: https://quantaroute.co.uk/openapi.json
 - LLM guide: https://quantaroute.co.uk/llms.txt
 - MCP tool: `optimise_delivery_route`
+- Optional API key header: `X-API-Key`
 
 ## Route History Storage
 
@@ -88,6 +117,7 @@ Safety notes:
 - QuantaRoute does not guarantee the mathematically shortest route in all cases.
 - Drivers must follow road laws, live traffic conditions, vehicle restrictions, and professional judgement.
 - Stripe checkout is not active yet; public testing remains free while payments are prepared.
+- API keys are optional during public testing and will become part of paid/API access later.
 
 Local API test:
 
@@ -141,7 +171,8 @@ MCP config example:
         "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
       ],
       "env": {
-        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk",
+        "QUANTAROUTE_API_KEY": "optional-during-public-testing"
       }
     }
   }

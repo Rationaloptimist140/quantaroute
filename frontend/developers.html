@@ -297,6 +297,7 @@
       <h2 id="apiTitle">Public API</h2>
       <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route.</p>
       <p><span class="endpoint">POST /api/optimise-route</span></p>
+      <p class="note"><strong>API keys:</strong> during public testing, API keys are optional. If you have a key, send it with <code>X-API-Key</code>. Paid/API access will require keys later.</p>
 
       <div class="grid two">
         <article class="mini-card">
@@ -305,11 +306,12 @@
         </article>
         <article class="mini-card">
           <h3>Output</h3>
-          <p>Receive ordered stops, distance estimates, estimated saving, Google Maps URL, WhatsApp driver message, and warnings.</p>
+          <p>Receive ordered stops, distance estimates, estimated saving, Google Maps URL, WhatsApp driver message, route sheet URL, optional API-client usage metadata, and warnings.</p>
         </article>
       </div>
 
       <h3>Example request</h3>
+      <p class="note">Optional header: <code>X-API-Key: qr_your_key_here</code></p>
       <pre><code>{
   "start": "Plymouth Railway Station, North Road, Plymouth, PL4 6AB",
   "stops": [
@@ -345,6 +347,9 @@
   "google_maps_url": "https://www.google.com/maps/dir/...",
   "whatsapp_message": "Hi Driver! Your optimised route is ready...",
   "route_sheet_url": "https://quantaroute.co.uk/route-sheet/123",
+  "api_client": "Courier Bot",
+  "usage_count_current_month": 12,
+  "monthly_limit": 1000,
   "warnings": [
     "Distance estimates compare route candidates against the address order entered.",
     "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
@@ -407,13 +412,24 @@ npm start</code></pre>
         "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
       ],
       "env": {
-        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk",
+        "QUANTAROUTE_API_KEY": "optional-during-public-testing"
       }
     }
   }
 }</code></pre>
 
       <p class="note">The MCP tool calls the same <strong>POST /api/optimise-route</strong> endpoint as the public API. It does not duplicate route logic.</p>
+    </section>
+
+    <section class="card" aria-labelledby="keysTitle">
+      <h2 id="keysTitle">API Keys</h2>
+      <p class="lead">API keys are being prepared for paid access, rate limits, and partner integrations. They are optional while public testing remains open.</p>
+      <p class="note">Keys are stored as one-way hashes. The raw key is only shown once when created.</p>
+      <h3>Create a local/dev key</h3>
+      <pre><code>cd C:\Users\rw718\Desktop\QuantaRoute
+python scripts\create_api_key.py --label "Courier Bot" --monthly-limit 1000 --source-label courier_bot</code></pre>
+      <p class="note">Use <code>DATABASE_URL</code> before running the script if you want to create the key in a Postgres database instead of local SQLite.</p>
     </section>
 
     <section class="card" aria-labelledby="docsTitle">
@@ -429,7 +445,7 @@ npm start</code></pre>
       <h2 id="safetyTitle">Safety and Billing Notes</h2>
       <p class="note">QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic, road closures, vehicle restrictions, and professional judgement.</p>
       <p class="note">Do not include depot/start/end inside stops unless it is a real delivery stop.</p>
-      <p class="note">Stripe checkout is not active yet. QuantaRoute is currently free to test while payments are being prepared.</p>
+      <p class="note">Stripe checkout is not active yet. QuantaRoute is currently free to test while payments are being prepared. API keys are optional for now and will become part of paid/API access later.</p>
     </section>
 
     <footer class="footer">

@@ -13,7 +13,7 @@ from typing import Literal
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
-from fastapi import FastAPI, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "postgres-history-2026-06-04"
+APP_BUILD = "api-key-foundation-2026-06-04"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -69,15 +69,16 @@ from database import (
     init_db,
     record_allowed_route_use,
     save_route,
+    validate_and_record_api_key,
 )
 
 init_db()
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
 
-# TODO: Add future X-API-Key header support for production API consumers.
 # TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
 # TODO: Add future per-route billing once Stripe checkout is active.
+# TODO: Add future unauthenticated public traffic throttling before wider launch.
 
 
 @app.exception_handler(RequestValidationError)
@@ -405,6 +406,9 @@ class PublicOptimiseRouteSuccess(BaseModel):
     google_maps_url: str
     whatsapp_message: str
     route_sheet_url: str | None = None
+    api_client: str | None = None
+    usage_count_current_month: int | None = None
+    monthly_limit: int | None = None
     warnings: list[str]
 
     model_config = {
@@ -427,6 +431,9 @@ class PublicOptimiseRouteSuccess(BaseModel):
                 "google_maps_url": "https://www.google.com/maps/dir/Plymouth%2C%20UK/...",
                 "whatsapp_message": "Hi Driver! Your optimised route is ready. Tap to open in Google Maps: https://www.google.com/maps/dir/...",
                 "route_sheet_url": "https://quantaroute.co.uk/route-sheet/123",
+                "api_client": "Example Courier Tool",
+                "usage_count_current_month": 12,
+                "monthly_limit": 1000,
                 "warnings": [
                     "Distance estimates compare route candidates against the address order entered.",
                     "Drivers must follow live road conditions, vehicle restrictions, and professional judgement.",
@@ -458,6 +465,20 @@ def public_api_error(
             },
         },
     )
+
+
+def api_client_response_metadata(api_client: dict | None) -> dict:
+    if not api_client:
+        return {
+            "api_client": None,
+            "usage_count_current_month": None,
+            "monthly_limit": None,
+        }
+    return {
+        "api_client": api_client.get("label"),
+        "usage_count_current_month": api_client.get("usage_count_current_month"),
+        "monthly_limit": api_client.get("monthly_limit"),
+    }
 
 
 def clean_public_stops(stops: list[str]) -> tuple[list[str], list[str]]:
@@ -543,9 +564,15 @@ Use this endpoint when an AI assistant or business agent needs to optimise a rou
 Required fields: start, stops.
 Optional fields: end, vehicle, optimise_for.
 
+Optional header during public testing: X-API-Key.
+
 ## Output summary
 
-The API returns ordered stops, original distance, optimised distance, distance saved, estimated saving percent, Google Maps URL, WhatsApp driver message, and warnings.
+The API returns ordered stops, original distance, optimised distance, distance saved, estimated saving percent, Google Maps URL, WhatsApp driver message, route sheet URL, optional API client usage metadata, and warnings.
+
+## API keys
+
+API keys are optional while QuantaRoute is free to test. Paid/API access and higher limits will require API keys later. Raw API keys are not stored.
 
 ## Example task
 
@@ -692,13 +719,36 @@ def route_sheet(route_id: int):
             "model": PublicOptimiseRouteErrorResponse,
             "description": "Free trial ended.",
         },
+        401: {
+            "model": PublicOptimiseRouteErrorResponse,
+            "description": "Invalid or inactive API key.",
+        },
         422: {
             "model": PublicOptimiseRouteErrorResponse,
             "description": "Invalid JSON or schema validation error.",
         },
     },
 )
-async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request: Request):
+async def api_optimise_route(
+    route_request: PublicOptimiseRouteRequest,
+    request: Request,
+    x_api_key: str | None = Header(
+        default=None,
+        alias="X-API-Key",
+        description="Optional during public testing. Paid/API access will require this later.",
+    ),
+):
+    api_client: dict | None = None
+    if x_api_key:
+        api_key_valid, api_client, api_key_error = validate_and_record_api_key(x_api_key)
+        if not api_key_valid:
+            return public_api_error(
+                401,
+                "INVALID_API_KEY",
+                api_key_error or "API key is invalid or inactive.",
+                ["Remove X-API-Key to use public testing, or use an active API key."],
+            )
+
     clean_start = clean_route_address(route_request.start)
     clean_end = clean_route_address(route_request.end or "")
     clean_stops, warnings = clean_public_stops(route_request.stops)
@@ -747,7 +797,7 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
             ["Split larger routes into smaller batches for now."],
         )
 
-    usage_response = enforce_usage_limit(request)
+    usage_response = enforce_usage_limit(request) if api_client is None else None
     if usage_response:
         return public_api_error(
             402,
@@ -813,9 +863,13 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
     whatsapp_message = build_whatsapp_message(google_maps_url, "Driver")
 
     response_warnings = public_route_warnings(route_request, result, warnings)
-    route_source = request.headers.get("x-quantaroute-source", "api").strip().lower() or "api"
-    if route_source not in {"api", "mcp", "web"}:
-        route_source = "api"
+    if api_client is not None:
+        client_source = api_client.get("source_label") or api_client.get("label") or "api_client"
+        route_source = f"api_key:{client_source}"
+    else:
+        route_source = request.headers.get("x-quantaroute-source", "api").strip().lower() or "api"
+        if route_source not in {"api", "mcp", "web"}:
+            route_source = "api"
     route_id = record_route_history(
         driver_name="API Agent",
         result=result,
@@ -843,6 +897,7 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
         "google_maps_url": google_maps_url,
         "whatsapp_message": whatsapp_message,
         "route_sheet_url": route_sheet_url,
+        **api_client_response_metadata(api_client),
         "warnings": response_warnings,
     }
 

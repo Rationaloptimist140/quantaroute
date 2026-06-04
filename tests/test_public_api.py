@@ -1,8 +1,9 @@
 from fastapi.testclient import TestClient
 
+import database
 from backend import main
 from backend.main import app
-from database import save_route
+from database import create_api_key, get_route_by_id, save_route
 
 
 client = TestClient(app)
@@ -64,6 +65,83 @@ def test_public_api_success(monkeypatch):
     assert data["google_maps_url"].startswith("https://www.google.com/maps/dir/")
     assert "Tap to open in Google Maps" in data["whatsapp_message"]
     assert data["route_sheet_url"].startswith("http://testserver/route-sheet/")
+    assert data["api_client"] is None
+    assert data["usage_count_current_month"] is None
+    assert data["monthly_limit"] is None
+
+
+def test_public_api_with_valid_api_key_tracks_usage_and_route_source(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "api-key-test.db")
+    database.init_db(force=True)
+
+    async def fake_optimise_route(**_kwargs):
+        return fake_route_result()
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+    api_key = create_api_key(
+        "Courier Bot",
+        monthly_limit=1000,
+        source_label="courier_bot",
+    )
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": api_key["api_key"]},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["api_client"] == "Courier Bot"
+    assert data["usage_count_current_month"] == 1
+    assert data["monthly_limit"] == 1000
+
+    route_id = int(data["route_sheet_url"].rstrip("/").rsplit("/", 1)[-1])
+    route = get_route_by_id(route_id)
+    assert route is not None
+    assert route["source"] == "api_key:courier_bot"
+
+
+def test_public_api_invalid_api_key_rejected(monkeypatch):
+    async def fake_optimise_route(**_kwargs):
+        raise AssertionError("optimise_route should not run for invalid API keys")
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": "qr_not_a_real_key"},
+    )
+
+    assert response.status_code == 401
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "INVALID_API_KEY"
+
+
+def test_public_api_inactive_api_key_rejected(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "inactive-key-test.db")
+    database.init_db(force=True)
+    api_key = create_api_key("Inactive Client")
+    key_hash = database.hash_api_key(api_key["api_key"])
+    with database.get_sqlite_connection() as conn:
+        conn.execute("UPDATE api_keys SET is_active = 0 WHERE key_hash = ?", (key_hash,))
+        conn.commit()
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": api_key["api_key"]},
+    )
+
+    assert response.status_code == 401
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "INVALID_API_KEY"
 
 
 def test_bad_json_returns_structured_validation_error():
@@ -147,6 +225,7 @@ def test_openapi_includes_public_api_route():
 
     assert response.status_code == 200
     assert "/api/optimise-route" in response.text
+    assert "X-API-Key" in response.text
 
 
 def test_developers_page_is_served():

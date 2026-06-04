@@ -7,7 +7,9 @@ production route sheets survive Render restarts and redeploys.
 
 import json
 import os
+import hashlib
 import sqlite3
+import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -104,6 +106,19 @@ POSTGRES_ROUTE_COLUMNS = [
     ("vehicle", "TEXT"),
     ("optimise_for", "TEXT"),
 ]
+
+
+API_KEY_SELECT_COLUMNS = """
+    id,
+    key_hash,
+    label,
+    source_label,
+    created_at,
+    last_used_at,
+    is_active,
+    monthly_limit,
+    usage_count_current_month
+"""
 
 
 def get_database_url() -> str:
@@ -217,6 +232,21 @@ def init_sqlite() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key_hash TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                source_label TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMP,
+                is_active INTEGER DEFAULT 1,
+                monthly_limit INTEGER,
+                usage_count_current_month INTEGER DEFAULT 0
+            )
+            """
+        )
         conn.commit()
 
 
@@ -250,6 +280,21 @@ def init_postgres() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS api_keys (
+                id BIGSERIAL PRIMARY KEY,
+                key_hash TEXT UNIQUE NOT NULL,
+                label TEXT NOT NULL,
+                source_label TEXT,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                last_used_at TIMESTAMPTZ,
+                is_active BOOLEAN DEFAULT TRUE,
+                monthly_limit INTEGER,
+                usage_count_current_month INTEGER DEFAULT 0
+            )
+            """
+        )
 
 
 def init_db(force: bool = False) -> None:
@@ -263,6 +308,160 @@ def init_db(force: bool = False) -> None:
     else:
         init_sqlite()
     _SCHEMA_READY_FOR = key
+
+
+def hash_api_key(raw_key: str) -> str:
+    return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+
+
+def generate_api_key() -> str:
+    return f"qr_{secrets.token_urlsafe(32)}"
+
+
+def create_api_key(
+    label: str,
+    *,
+    monthly_limit: int | None = None,
+    source_label: str | None = None,
+) -> dict[str, Any]:
+    init_db()
+    raw_key = generate_api_key()
+    key_hash = hash_api_key(raw_key)
+    clean_label = str(label or "API Client").strip() or "API Client"
+    clean_source = str(source_label or clean_label).strip() or clean_label
+
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                """
+                INSERT INTO api_keys (
+                    key_hash,
+                    label,
+                    source_label,
+                    monthly_limit
+                )
+                VALUES (%s, %s, %s, %s)
+                RETURNING id, label, source_label, monthly_limit, created_at
+                """,
+                (key_hash, clean_label, clean_source, monthly_limit),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO api_keys (
+                    key_hash,
+                    label,
+                    source_label,
+                    monthly_limit
+                )
+                VALUES (?, ?, ?, ?)
+                """,
+                (key_hash, clean_label, clean_source, monthly_limit),
+            )
+            conn.commit()
+            row = conn.execute(
+                """
+                SELECT id, label, source_label, monthly_limit, created_at
+                FROM api_keys
+                WHERE id = ?
+                """,
+                (cursor.lastrowid,),
+            ).fetchone()
+
+    record = dict(row)
+    record["api_key"] = raw_key
+    return record
+
+
+def get_api_key_by_hash(key_hash: str) -> dict[str, Any] | None:
+    init_db()
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM api_keys
+                WHERE key_hash = %s
+                """,
+                (key_hash,),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM api_keys
+                WHERE key_hash = ?
+                """,
+                (key_hash,),
+            ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def should_reset_monthly_usage(last_used_at: Any, now: datetime) -> bool:
+    if not last_used_at:
+        return True
+    try:
+        last_used = parse_timestamp(last_used_at)
+    except (TypeError, ValueError):
+        return True
+    return (last_used.year, last_used.month) != (now.year, now.month)
+
+
+def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | None, str | None]:
+    clean_key = str(raw_key or "").strip()
+    if not clean_key:
+        return False, None, "API key is empty."
+
+    key_hash = hash_api_key(clean_key)
+    record = get_api_key_by_hash(key_hash)
+    if record is None:
+        return False, None, "API key was not recognised."
+    if not parse_bool(record.get("is_active")):
+        return False, record, "API key is inactive."
+
+    now = datetime.now(UTC)
+    current_count = int(record.get("usage_count_current_month") or 0)
+    usage_count = 1 if should_reset_monthly_usage(record.get("last_used_at"), now) else current_count + 1
+    now_value = now.isoformat()
+
+    # TODO: Enforce monthly_limit once paid API plans and customer accounts exist.
+    # TODO: Map API keys to Stripe customers/subscriptions before billing launch.
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                UPDATE api_keys
+                SET last_used_at = %s,
+                    usage_count_current_month = %s
+                WHERE id = %s
+                RETURNING {API_KEY_SELECT_COLUMNS}
+                """,
+                (now, usage_count, record["id"]),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                """
+                UPDATE api_keys
+                SET last_used_at = ?,
+                    usage_count_current_month = ?
+                WHERE id = ?
+                """,
+                (now_value, usage_count, record["id"]),
+            )
+            conn.commit()
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM api_keys
+                WHERE id = ?
+                """,
+                (record["id"],),
+            ).fetchone()
+
+    return True, dict(row), None
 
 
 def json_list(value: Any) -> str:

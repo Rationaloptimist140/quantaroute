@@ -30,6 +30,9 @@ export interface OptimiseRouteResult {
   google_maps_url?: string;
   whatsapp_message?: string;
   route_sheet_url?: string;
+  api_client?: string;
+  usage_count_current_month?: number;
+  monthly_limit?: number | null;
   warnings?: string[];
   error?: RouteError;
 }
@@ -74,13 +77,18 @@ export async function optimiseDeliveryRoute(
   input: OptimiseRouteInput,
   apiBaseUrl = process.env.QUANTAROUTE_API_BASE_URL || "https://quantaroute.co.uk",
 ): Promise<OptimiseRouteResult> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-QuantaRoute-Source": "mcp",
+  };
+  if (process.env.QUANTAROUTE_API_KEY) {
+    headers["X-API-Key"] = process.env.QUANTAROUTE_API_KEY;
+  }
+
   const response = await fetch(`${apiBaseUrl.replace(/\/$/, "")}/api/optimise-route`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-QuantaRoute-Source": "mcp",
-    },
+    headers,
     body: JSON.stringify({
       vehicle: "van",
       optimise_for: "distance",

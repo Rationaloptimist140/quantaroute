@@ -27,6 +27,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains an experimental/internal optimisation module, not the live route-selection promise.
 - API-first promise: agents can submit a start point, 2-20 delivery stops, optional end point, vehicle, and optimisation preference, then receive ordered stops, benchmark distances, estimated saving, a Google Maps URL, WhatsApp message, and warnings.
 - MCP promise: a runnable local stdio MCP server now exposes `optimise_delivery_route` and calls the same public FastAPI endpoint.
+- API-key foundation: `X-API-Key` is optional during public testing; valid keys are hashed at rest, usage-counted, and can tag API/MCP route history for future paid access and rate limits.
 - The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
@@ -69,9 +70,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `backend/services/requirements.txt` - kept service dependency pins aligned, including the Postgres driver.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
-- `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, route-history saving for API requests, and a health-check build marker.
+- `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, optional `X-API-Key` handling, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, route-history saving for API requests, and a health-check build marker.
 - `backend/main.py` - public API, CSV upload, and web optimiser now return clear structured geocoding errors that identify the failed address and say: "Could not find this address. Try adding postcode, city, or full business address."
-- `backend/database.py` - dual SQLite/Postgres route history storage, benchmark metric persistence, automatic table initialisation, save/list/lookup helpers, and IP-based usage tracking.
+- `backend/database.py` - dual SQLite/Postgres route history storage, benchmark metric persistence, automatic table initialisation, API-key hashing/storage/usage helpers, save/list/lookup helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, Nominatim GB fallback, and Photon fallback for commercial/place-name addresses.
 - `backend/services/geocoder.py` - Nominatim requests now include the QuantaRoute contact email in the User-Agent so the hosted service is identifiable to public geocoding infrastructure.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
@@ -87,17 +88,19 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `frontend/landing.html` - updated with API-first/product positioning, 20-stop Plymouth proof section, audience list, simplified how-it-works steps, agent-ready API/MCP section, safer savings language, and current pricing/payment copy.
 - `frontend/landing.html` - links to `developers.html`, `/openapi.json`, and `/llms.txt` for public developer/agent access.
 - `frontend/developers.html` - public static developer page explaining `POST /api/optimise-route`, MCP tool `optimise_delivery_route`, API request/response examples, local MCP setup, estimated-savings safety note, and current free-to-test/Stripe-not-active status.
-- `frontend/developers.html` - polished developer subtitle, added response explanation, duplicate depot warning, and public status section for API/MCP/payments/PDF/time/vehicle routing.
+- `frontend/developers.html` - polished developer subtitle, added response explanation, optional API-key docs, duplicate depot warning, and public status section for API/MCP/payments/PDF/time/vehicle routing.
 - `examples/` - added a Plymouth API request JSON, live PowerShell curl example, and Claude Desktop/Cursor/Codex-style MCP config.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
-- `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic, and tagging requests with `X-QuantaRoute-Source: mcp`.
+- `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic, tagging requests with `X-QuantaRoute-Source: mcp`, and optionally forwarding `QUANTAROUTE_API_KEY`.
+- `mcp/README.md` - documents optional `QUANTAROUTE_API_KEY` usage.
+- `scripts/create_api_key.py` - local/dev CLI helper that creates a raw API key once and stores only its SHA-256 hash.
 - `mcp/package.json`, `mcp/package-lock.json`, `mcp/tsconfig.json`, `mcp/README.md`, `mcp/test-api-call.ts`, `mcp/test-mcp-call.ts` - package scripts, build config, MCP config examples, and direct/MCP call tests.
 - `README.md` - refreshed API-first documentation, endpoint example, agent-ready direction, pricing, and safety language.
 - `requirements-dev.txt` - Python dev/test dependencies.
-- `tests/` - pytest coverage for the public API success/error/docs paths, start/end distance reporting, route sheets, and SQLite fallback route-history persistence.
+- `tests/` - pytest coverage for the public API success/error/docs paths, optional API-key success/error paths, start/end distance reporting, route sheets, SQLite fallback route-history persistence, and hashed API-key storage.
 
 ## Bugs Fixed
 
@@ -124,6 +127,10 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Successful route optimisation responses can now include `route_sheet_url`, using the saved route history ID from Postgres or SQLite.
 - `GET /route-sheet/{route_id}` renders a printable driver route sheet from saved route history.
 - Production route history can persist across Render redeploys when `DATABASE_URL` points to Postgres; local development still falls back to `backend/quantaroute.db`.
+- Optional `X-API-Key` support is now implemented for `POST /api/optimise-route`. Valid keys update `last_used_at` and `usage_count_current_month`; invalid or inactive keys return structured `401` errors.
+- Raw API keys are not stored; `api_keys.key_hash` stores a SHA-256 hash.
+- Public no-key API testing still works while payments and paid API access are being prepared.
+- MCP requests can optionally use `QUANTAROUTE_API_KEY` and are tagged as MCP/API-client traffic.
 - Public API has non-blocking future TODOs for `X-API-Key`, rate limiting, and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
@@ -147,6 +154,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - PDF export is not implemented; users can print the HTML route sheet or use browser print-to-PDF.
 - If `DATABASE_URL` is missing in production, route history falls back to SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so old route sheet URLs can reset without Postgres.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
+- API-key monthly limits are stored but not enforced yet.
+- Unauthenticated public API traffic is still allowed and not fully rate-limited yet.
+- API keys are not mapped to Stripe customers yet.
 - Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.
 - The "up to 49%" marketing claim needs supporting data or should be adjusted to match proven results.
 - Render free tier can cold start, so first request may be slow.
@@ -236,6 +246,24 @@ Invoke-RestMethod -Method Post `
   -Body $body
 ```
 
+Create a local/dev API key:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+python scripts\create_api_key.py --label "Courier Bot" --monthly-limit 1000 --source-label courier_bot
+```
+
+Use a key with the public API:
+
+```powershell
+$headers = @{ "X-API-Key" = "qr_your_key_here" }
+Invoke-RestMethod -Method Post `
+  -Uri "https://quantaroute.co.uk/api/optimise-route" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $body
+```
+
 MCP install/build/run:
 
 ```powershell
@@ -243,6 +271,7 @@ cd C:\Users\rw718\Desktop\QuantaRoute\mcp
 npm install
 npm run build
 $env:QUANTAROUTE_API_BASE_URL="https://quantaroute.co.uk"
+$env:QUANTAROUTE_API_KEY="optional-during-public-testing"
 npm start
 ```
 

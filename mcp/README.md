@@ -31,6 +31,12 @@ $env:QUANTAROUTE_API_BASE_URL="https://quantaroute.co.uk"
 
 If omitted, the server defaults to `https://quantaroute.co.uk`.
 
+API keys are optional during public testing. If you have one:
+
+```powershell
+$env:QUANTAROUTE_API_KEY="qr_your_key_here"
+```
+
 ## Run
 
 Development:
@@ -73,7 +79,8 @@ Use the compiled server after running `npm install` and `npm run build`.
         "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
       ],
       "env": {
-        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk",
+        "QUANTAROUTE_API_KEY": "optional-during-public-testing"
       }
     }
   }

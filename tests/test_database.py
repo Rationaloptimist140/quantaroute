@@ -61,3 +61,25 @@ def test_sqlite_fallback_route_history_round_trip(tmp_path, monkeypatch):
 
     history = database.get_recent_routes(limit=1)
     assert history[0]["id"] == route_id
+
+
+def test_api_key_creation_stores_hash_only(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "api-key-storage.db")
+    database.init_db(force=True)
+
+    created = database.create_api_key("Test Client", monthly_limit=25)
+    raw_key = created["api_key"]
+    key_hash = database.hash_api_key(raw_key)
+
+    with database.get_sqlite_connection() as conn:
+        row = conn.execute(
+            "SELECT key_hash, label, monthly_limit FROM api_keys WHERE key_hash = ?",
+            (key_hash,),
+        ).fetchone()
+
+    assert row is not None
+    assert row["key_hash"] == key_hash
+    assert row["key_hash"] != raw_key
+    assert row["label"] == "Test Client"
+    assert row["monthly_limit"] == 25

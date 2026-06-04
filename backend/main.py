@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "agent-api-2026-06-02"
+APP_BUILD = "postgres-history-2026-06-04"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -101,9 +101,28 @@ def build_route_sheet_url(request: Request, route_id: int) -> str:
     return f"{str(request.base_url).rstrip('/')}/route-sheet/{route_id}"
 
 
-def record_route_history(driver_name: str, result: dict) -> int | None:
+def record_route_history(
+    driver_name: str,
+    result: dict,
+    *,
+    source: str = "web",
+    vehicle: str | None = "van",
+    optimise_for: str | None = "distance",
+    original_addresses: list[str] | None = None,
+    warnings: list[str] | None = None,
+    whatsapp_message: str | None = None,
+) -> int | None:
     try:
-        return save_route(driver_name=driver_name, result=result)
+        return save_route(
+            driver_name=driver_name,
+            result=result,
+            source=source,
+            vehicle=vehicle,
+            optimise_for=optimise_for,
+            original_addresses=original_addresses,
+            warnings=warnings,
+            whatsapp_message=whatsapp_message,
+        )
     except Exception as e:
         logger.error(f"Failed to save route history: {e}")
         return None
@@ -628,7 +647,15 @@ async def upload_csv(
                 "details": e.as_details(),
             },
         )
-    route_id = record_route_history(driver_name=driver_name, result=result)
+    route_id = record_route_history(
+        driver_name=driver_name,
+        result=result,
+        source="web_csv",
+        vehicle="van",
+        optimise_for="distance",
+        original_addresses=addresses,
+        whatsapp_message=build_whatsapp_message(result.get("maps_url", ""), driver_name),
+    )
     if route_id is not None:
         result["route_sheet_url"] = build_route_sheet_url(request, route_id)
     return RouteResponse(**{k: result.get(k) for k in RouteResponse.model_fields})
@@ -785,7 +812,20 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
     google_maps_url = result.get("maps_url", "")
     whatsapp_message = build_whatsapp_message(google_maps_url, "Driver")
 
-    route_id = record_route_history(driver_name="API Agent", result=result)
+    response_warnings = public_route_warnings(route_request, result, warnings)
+    route_source = request.headers.get("x-quantaroute-source", "api").strip().lower() or "api"
+    if route_source not in {"api", "mcp", "web"}:
+        route_source = "api"
+    route_id = record_route_history(
+        driver_name="API Agent",
+        result=result,
+        source=route_source,
+        vehicle=route_request.vehicle,
+        optimise_for=route_request.optimise_for,
+        original_addresses=clean_stops,
+        warnings=response_warnings,
+        whatsapp_message=whatsapp_message,
+    )
     route_sheet_url = build_route_sheet_url(request, route_id) if route_id is not None else None
 
     return {
@@ -803,7 +843,7 @@ async def api_optimise_route(route_request: PublicOptimiseRouteRequest, request:
         "google_maps_url": google_maps_url,
         "whatsapp_message": whatsapp_message,
         "route_sheet_url": route_sheet_url,
-        "warnings": public_route_warnings(route_request, result, warnings),
+        "warnings": response_warnings,
     }
 
 @app.post("/quantum/route-optimise", response_model=RouteResponse)
@@ -822,7 +862,18 @@ async def route_optimise(route_request: RouteRequest, request: Request):
             start_address=route_request.start_address,
             return_to_start=route_request.return_to_start,
         )
-        route_id = record_route_history(driver_name=route_request.driver_name, result=result)
+        route_id = record_route_history(
+            driver_name=route_request.driver_name,
+            result=result,
+            source="web",
+            vehicle="van",
+            optimise_for="distance",
+            original_addresses=route_request.addresses,
+            whatsapp_message=build_whatsapp_message(
+                result.get("maps_url", ""),
+                route_request.driver_name,
+            ),
+        )
         if route_id is not None:
             result["route_sheet_url"] = build_route_sheet_url(request, route_id)
         return RouteResponse(**{k: result.get(k) for k in RouteResponse.model_fields})

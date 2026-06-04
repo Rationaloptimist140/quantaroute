@@ -79,6 +79,7 @@ export async function optimiseDeliveryRoute(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
+      "X-QuantaRoute-Source": "mcp",
     },
     body: JSON.stringify({
       vehicle: "van",

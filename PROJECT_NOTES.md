@@ -61,17 +61,17 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
   - 5 stops in Plymouth/Exeter: `3.74%` fuel saved.
   - 30 stops across South West England: `13.62%` fuel saved.
 - Homepage now avoids the unsupported "up to 49%" headline and focuses on smarter route optimisation, road distances, and visible fuel savings.
-- SQLite route history is now implemented locally/session-locally.
+- Route history uses Postgres in production when `DATABASE_URL` is set, with SQLite kept as the local development fallback.
 
 ## Files Changed
 
-- `requirements.txt` - updated Python 3.14-compatible dependency pins.
-- `backend/services/requirements.txt` - kept service dependency pins aligned.
+- `requirements.txt` - updated Python 3.14-compatible dependency pins and added `psycopg[binary]` for Postgres route-history persistence.
+- `backend/services/requirements.txt` - kept service dependency pins aligned, including the Postgres driver.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
 - `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, route-history saving for API requests, and a health-check build marker.
 - `backend/main.py` - public API, CSV upload, and web optimiser now return clear structured geocoding errors that identify the failed address and say: "Could not find this address. Try adding postcode, city, or full business address."
-- `backend/database.py` - SQLite route history storage, benchmark metric persistence, automatic database initialisation/migration, save/list helpers, and IP-based usage tracking.
+- `backend/database.py` - dual SQLite/Postgres route history storage, benchmark metric persistence, automatic table initialisation, save/list/lookup helpers, and IP-based usage tracking.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, Nominatim GB fallback, and Photon fallback for commercial/place-name addresses.
 - `backend/services/geocoder.py` - Nominatim requests now include the QuantaRoute contact email in the User-Agent so the hosted service is identifiable to public geocoding infrastructure.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
@@ -93,11 +93,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
-- `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route` and calling the FastAPI public API instead of duplicating optimisation logic.
+- `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic, and tagging requests with `X-QuantaRoute-Source: mcp`.
 - `mcp/package.json`, `mcp/package-lock.json`, `mcp/tsconfig.json`, `mcp/README.md`, `mcp/test-api-call.ts`, `mcp/test-mcp-call.ts` - package scripts, build config, MCP config examples, and direct/MCP call tests.
 - `README.md` - refreshed API-first documentation, endpoint example, agent-ready direction, pricing, and safety language.
 - `requirements-dev.txt` - Python dev/test dependencies.
-- `tests/` - pytest coverage for the public API success/error/docs paths and start/end distance reporting.
+- `tests/` - pytest coverage for the public API success/error/docs paths, start/end distance reporting, route sheets, and SQLite fallback route-history persistence.
 
 ## Bugs Fixed
 
@@ -111,9 +111,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Failed or malformed geocoder results are now filtered before distance-matrix work, avoiding `NoneType` crashes when an address cannot be geocoded.
 - OSRM `distances: null` or incomplete distance matrices now fall back to Haversine instead of crashing.
 - Live route selection no longer enters QAOA for 8-20 stop jobs; stress testing showed larger QAOA simulation could exceed request timeouts or lock a free-tier worker.
-- SQLite route history now initialises automatically and saves each successful JSON or CSV route optimisation.
+- Route history now initialises automatically in Postgres or SQLite and saves each successful JSON or CSV route optimisation.
 - `GET /routes/history` returns the last 50 saved routes.
-- SQLite `users` table tracks first use, route count, and paying status by IP address.
+- The `users` table tracks first use, route count, and paying status by IP address in whichever storage backend is active.
 - Backend blocks expired free-trial users with HTTP `402` and the frontend shows a friendly upgrade prompt.
 - CSV row numbers, surrounding quote marks, and trailing commas are stripped from displayed stops, API `ordered_addresses`, Google Maps directions links, and WhatsApp share links.
 - Multi-column CSV uploads now extract business name + address columns and ignore stop numbers, postcode-only fields, and order details so stop names display cleanly.
@@ -121,8 +121,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - API responses and route history now include benchmark fields for original input order distance, nearest-neighbour distance, final selected route distance, and fuel saving versus original order.
 - Frontend results now show a collapsed "Benchmark details" section when benchmark API fields are available.
 - Public API endpoint `POST /api/optimise-route` now returns structured success JSON and structured `success: false` error JSON for invalid route input, over-20-stop requests, payment/trial blocks, and geocoding/optimisation failures.
-- Successful route optimisation responses can now include `route_sheet_url`, using the saved SQLite route ID.
+- Successful route optimisation responses can now include `route_sheet_url`, using the saved route history ID from Postgres or SQLite.
 - `GET /route-sheet/{route_id}` renders a printable driver route sheet from saved route history.
+- Production route history can persist across Render redeploys when `DATABASE_URL` points to Postgres; local development still falls back to `backend/quantaroute.db`.
 - Public API has non-blocking future TODOs for `X-API-Key`, rate limiting, and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
@@ -142,9 +143,9 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `optimise_for = "time"` is accepted for API compatibility, but current routing still optimises for distance and returns a warning.
 - `vehicle` is accepted for API compatibility, but current estimates use the existing van-style routing assumptions and return a warning for non-van values.
 - Full PDF generation is still a follow-up; current route sheets use printable HTML and browser print-to-PDF.
-- Route sheets use SQLite route IDs, so Render free-tier filesystem resets can make older route sheet URLs unavailable after restarts/redeploys.
+- Route sheets use persistent Postgres route IDs when `DATABASE_URL` is configured.
 - PDF export is not implemented; users can print the HTML route sheet or use browser print-to-PDF.
-- Route history uses SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so production history can reset after restarts/redeploys.
+- If `DATABASE_URL` is missing in production, route history falls back to SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so old route sheet URLs can reset without Postgres.
 - Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
 - Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.
 - The "up to 49%" marketing claim needs supporting data or should be adjusted to match proven results.
@@ -166,8 +167,11 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
    - Build command: `pip install -r ../requirements.txt`
    - Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - Health check: `/health`
+   - Production persistence: create a Render Postgres database and set the web service environment variable `DATABASE_URL` to its internal database URL.
 
 4. Render usually auto-deploys on push. If it lags, trigger a manual deploy from the Render dashboard or API.
+
+5. On startup, `backend/database.py` creates or extends the `routes` and `users` tables automatically. No manual migration command is currently required.
 
 ## Important Commands
 
@@ -276,5 +280,11 @@ Local SQLite database:
 
 - File path: `backend/quantaroute.db`
 - This file is ignored by Git.
-- It is created automatically on startup by `backend/database.py`.
+- It is created automatically on startup by `backend/database.py` when `DATABASE_URL` is not set.
 - Tables: `routes` for route history and `users` for free-trial usage tracking.
+
+Postgres production database:
+
+- Set `DATABASE_URL` in the Render web service environment.
+- The same `routes` and `users` tables are created automatically on startup.
+- Route sheets at `/route-sheet/{route_id}` use Postgres records when `DATABASE_URL` is configured, so links can survive redeploys.

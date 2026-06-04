@@ -8,3 +8,4 @@ qiskit-optimization==0.7.0
 qiskit-aer==0.17.2
 pydantic==2.13.4
 python-multipart==0.0.9
+psycopg[binary]>=3.2.3,<4

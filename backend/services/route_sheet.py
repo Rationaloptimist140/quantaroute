@@ -58,6 +58,8 @@ def first_number(*values: Any) -> float:
 
 
 def route_sheet_whatsapp_message(route: dict[str, Any]) -> str:
+    if route.get("whatsapp_message"):
+        return str(route["whatsapp_message"])
     driver_name = route.get("driver_name") or "Driver"
     maps_url = route.get("maps_url") or ""
     return (
@@ -67,14 +69,14 @@ def route_sheet_whatsapp_message(route: dict[str, Any]) -> str:
 
 
 def build_route_sheet_html(route: dict[str, Any]) -> str:
-    ordered_addresses = route.get("ordered_addresses") or []
+    ordered_addresses = route.get("ordered_stops") or route.get("ordered_addresses") or []
     start_address = route.get("start_address") or ""
     end_address = route.get("end_address") or ""
     if not end_address and route.get("return_to_start") and start_address:
         end_address = start_address
 
     created_at = route.get("created_at") or datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
-    maps_url = route.get("maps_url") or ""
+    maps_url = route.get("maps_url") or route.get("google_maps_url") or ""
     whatsapp_message = route_sheet_whatsapp_message(route)
     route_title = f"Route Sheet #{route.get('id', '')}".strip()
     original_distance = first_number(

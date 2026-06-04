@@ -20,6 +20,7 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 - Google Maps route link
 - WhatsApp-ready driver message/link
 - Printable browser route sheet
+- Persistent route history with Postgres in production
 - CSV upload or pasted stops
 - Mobile-friendly browser app
 
@@ -63,6 +64,23 @@ MCP preparation lives in `mcp/server.ts` with the `optimise_delivery_route` tool
 - OpenAPI JSON: https://quantaroute.co.uk/openapi.json
 - LLM guide: https://quantaroute.co.uk/llms.txt
 - MCP tool: `optimise_delivery_route`
+
+## Route History Storage
+
+QuantaRoute uses `DATABASE_URL` when it is present. Set this to a Postgres
+connection string in production so route history and `/route-sheet/{route_id}`
+links survive Render restarts and redeploys.
+
+If `DATABASE_URL` is missing, the backend falls back to local SQLite at
+`backend/quantaroute.db`. This is useful for development, but SQLite files on
+Render's free-tier filesystem can disappear after restarts or redeploys.
+
+Render setup:
+
+1. Create a Render Postgres database.
+2. Copy its internal database URL.
+3. Add it to the QuantaRoute web service environment as `DATABASE_URL`.
+4. Redeploy the web service. The backend creates the required tables on startup.
 
 Safety notes:
 
@@ -140,7 +158,8 @@ QuantaRoute provides estimated route optimisation and fuel-saving calculations. 
 
 ## Stack
 
-- Backend: Python + FastAPI + SQLite
+- Backend: Python + FastAPI
+- Production storage: Postgres via `DATABASE_URL`, SQLite fallback locally
 - Frontend: HTML/CSS/JavaScript
 - Routing data: public geocoding and OSRM road-network distances
 - Deployment: Render

@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from html import escape
+import re
 from typing import Any
 
 SAFETY_NOTE = (
@@ -10,6 +11,8 @@ SAFETY_NOTE = (
     "vehicle type, and delivery constraints. Drivers must follow road laws and "
     "professional judgement."
 )
+
+UK_POSTCODE_RE = re.compile(r"\b([A-Z]{1,2}\d[A-Z\d]?)\s*(\d[A-Z]{2})\b", re.IGNORECASE)
 
 
 def build_route_sheet_text(result: dict[str, Any]) -> str:
@@ -57,6 +60,23 @@ def first_number(*values: Any) -> float:
     return 0.0
 
 
+def format_route_sheet_address(value: Any) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not text:
+        return ""
+
+    should_title_case = text.islower() or text.isupper()
+
+    def normalise_postcode(match: re.Match[str]) -> str:
+        return f"{match.group(1).upper()} {match.group(2).upper()}"
+
+    formatted = UK_POSTCODE_RE.sub(normalise_postcode, text)
+    if should_title_case:
+        formatted = formatted.title()
+        formatted = UK_POSTCODE_RE.sub(normalise_postcode, formatted)
+    return formatted
+
+
 def route_sheet_whatsapp_message(route: dict[str, Any]) -> str:
     if route.get("whatsapp_message"):
         return str(route["whatsapp_message"])
@@ -74,6 +94,10 @@ def build_route_sheet_html(route: dict[str, Any]) -> str:
     end_address = route.get("end_address") or ""
     if not end_address and route.get("return_to_start") and start_address:
         end_address = start_address
+    start_display = format_route_sheet_address(start_address)
+    end_display = format_route_sheet_address(end_address)
+    if not end_display:
+        end_display = "Final delivery stop — no return address selected"
 
     created_at = route.get("created_at") or datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     maps_url = route.get("maps_url") or route.get("google_maps_url") or ""
@@ -347,8 +371,8 @@ def build_route_sheet_html(route: dict[str, Any]) -> str:
     <section class="section">
       <h2>Start and end</h2>
       <div class="address-box">
-        <div class="address-row"><strong>Start:</strong> {escape(start_address or 'Not provided')}</div>
-        <div class="address-row"><strong>End:</strong> {escape(end_address or 'Final delivery stop')}</div>
+        <div class="address-row"><strong>Start:</strong> {escape(start_display or 'Not provided')}</div>
+        <div class="address-row"><strong>End:</strong> {escape(end_display)}</div>
       </div>
     </section>
 

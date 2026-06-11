@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "namespaced-db-tables-2026-06-04"
+APP_BUILD = "health-storage-backend-2026-06-11"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -64,11 +64,13 @@ if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 from database import (
+    get_database_url,
     get_recent_routes,
     get_route_by_id,
     init_db,
     record_allowed_route_use,
     save_route,
+    using_postgres,
     validate_and_record_api_key,
 )
 
@@ -100,6 +102,28 @@ async def api_validation_exception_handler(request: Request, exc: RequestValidat
 
 def build_route_sheet_url(request: Request, route_id: int) -> str:
     return f"{str(request.base_url).rstrip('/')}/route-sheet/{route_id}"
+
+
+def history_number(value) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def build_recent_route_item(route: dict, request: Request) -> dict:
+    route_id = route.get("id")
+    return {
+        "id": route_id,
+        "created_at": str(route.get("created_at") or ""),
+        "start_address": route.get("start_address") or "",
+        "end_address": route.get("end_address") or "",
+        "original_distance_km": history_number(route.get("original_distance_km") or route.get("original_order_distance_km")),
+        "optimised_distance_km": history_number(route.get("optimised_distance_km") or route.get("final_selected_distance_km")),
+        "distance_saved_km": history_number(route.get("distance_saved_km")),
+        "estimated_saving_percent": history_number(route.get("estimated_saving_percent") or route.get("fuel_saving_percent_vs_original")),
+        "route_sheet_url": build_route_sheet_url(request, int(route_id)) if route_id is not None else None,
+    }
 
 
 def record_route_history(
@@ -593,11 +617,20 @@ hi@quantaroute.co.uk
 
 @app.get("/health")
 def health():
+    try:
+        get_recent_routes(limit=1)
+        route_history_available = True
+    except Exception:
+        route_history_available = False
+
     return {
         "status": "ok",
         "service": "QuantaRoute API",
         "version": "1.0.0",
         "build": APP_BUILD,
+        "storage_backend": "postgres" if using_postgres() else "sqlite",
+        "database_configured": bool(get_database_url()),
+        "route_history_available": route_history_available,
     }
 
 
@@ -690,6 +723,14 @@ async def upload_csv(
 @app.get("/routes/history")
 def route_history():
     return get_recent_routes(limit=50)
+
+
+@app.get("/api/routes/recent")
+def recent_routes(request: Request):
+    return [
+        build_recent_route_item(route, request)
+        for route in get_recent_routes(limit=10)
+    ]
 
 
 @app.get("/route-sheet/{route_id}", response_class=HTMLResponse, include_in_schema=False)

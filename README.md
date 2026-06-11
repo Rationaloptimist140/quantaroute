@@ -111,6 +111,40 @@ Render setup:
 3. Add it to the QuantaRoute web service environment as `DATABASE_URL`.
 4. Redeploy the web service. The backend creates the required tables on startup.
 
+## Route History Export
+
+Export route history before changing storage, rotating databases, or letting a
+free Render Postgres instance expire. The export script uses Postgres when
+`DATABASE_URL` is set and local SQLite otherwise.
+
+Local SQLite export:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+python scripts\export_route_history.py --output-dir exports --format both --base-url https://quantaroute.co.uk
+```
+
+Postgres export from any shell with the production database URL:
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+$env:DATABASE_URL="postgresql://user:password@host:5432/database"
+python scripts\export_route_history.py --output-dir exports --format both --base-url https://quantaroute.co.uk
+```
+
+Render one-off shell/export:
+
+```powershell
+python scripts\export_route_history.py --output-dir exports --format both --base-url https://quantaroute.co.uk
+```
+
+The script writes timestamped JSON and CSV files named like
+`quantaroute_route_history_YYYYMMDD_HHMMSS.json` and `.csv`. CSV list fields
+such as `original_stops` and `ordered_stops` are JSON-encoded inside the cell so
+commas inside addresses remain safe. `route_sheet_url` is built from
+`--base-url`, so set that to the live domain or local server you want in the
+backup.
+
 Safety notes:
 
 - Distance and fuel savings are estimates.

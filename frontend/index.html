@@ -647,6 +647,21 @@
       color: var(--success);
     }
 
+    .history-route {
+      overflow-wrap: anywhere;
+    }
+
+    .history-sheet {
+      color: var(--accent);
+      font-size: 0.86rem;
+      font-weight: 700;
+      text-decoration: none;
+    }
+
+    .history-sheet:hover {
+      text-decoration: underline;
+    }
+
     .footer-link {
       margin: 2px 0 0;
       padding: 0 0 18px;
@@ -877,7 +892,7 @@
 
   <script>
     const API_URL = "https://quantaroute.onrender.com/quantum/route-optimise";
-    const HISTORY_URL = "https://quantaroute.onrender.com/routes/history";
+    const HISTORY_URL = new URL("/api/routes/recent", API_URL).toString();
 
     const form = document.querySelector("#routeForm");
     const driverName = document.querySelector("#driverName");
@@ -1234,14 +1249,27 @@
             <span class="history-saving"></span>
             <span></span>
           </div>
+          <div class="history-meta history-route">
+            <span></span>
+          </div>
+          <a class="history-sheet" href="#" target="_blank" rel="noopener">Open route sheet</a>
         `;
 
-        item.querySelector(".history-driver").textContent = route.driver_name || "Driver";
+        const start = cleanDisplayedAddress(route.start_address || "");
+        const end = cleanDisplayedAddress(route.end_address || "");
+        item.querySelector(".history-driver").textContent = route.id ? `Route #${route.id}` : "Recent route";
         item.querySelector(".history-date").textContent = formatHistoryDate(route.created_at);
         const meta = item.querySelectorAll(".history-meta span");
-        meta[0].textContent = `${route.stops_count || 0} stops`;
-        meta[1].textContent = `${Number(route.fuel_saving_percent || 0).toFixed(1)}% fuel saved`;
-        meta[2].textContent = `${Number(route.total_distance_km || 0).toFixed(1)} km`;
+        meta[0].textContent = `${Number(route.optimised_distance_km || 0).toFixed(1)} km final`;
+        meta[1].textContent = `${Number(route.estimated_saving_percent || 0).toFixed(1)}% saved`;
+        meta[2].textContent = `${Number(route.distance_saved_km || 0).toFixed(1)} km saved`;
+        meta[3].textContent = `${start || "Start not set"} → ${end || "Final delivery stop"}`;
+        const sheetLink = item.querySelector(".history-sheet");
+        if (route.route_sheet_url) {
+          sheetLink.href = route.route_sheet_url;
+        } else {
+          sheetLink.remove();
+        }
         historyList.appendChild(item);
       });
     }

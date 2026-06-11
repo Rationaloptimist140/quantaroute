@@ -51,6 +51,19 @@ def fake_route_result() -> dict:
     }
 
 
+def test_health_includes_safe_storage_diagnostics():
+    response = client.get("/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["build"] == "health-storage-backend-2026-06-11"
+    assert data["storage_backend"] in {"postgres", "sqlite"}
+    assert isinstance(data["database_configured"], bool)
+    assert isinstance(data["route_history_available"], bool)
+    assert "DATABASE_URL" not in data
+
+
 def test_public_api_success(monkeypatch):
     async def fake_optimise_route(**_kwargs):
         return fake_route_result()
@@ -250,3 +263,40 @@ def test_route_sheet_endpoint_renders_saved_route():
     assert "https://www.google.com/maps/dir/Plymouth/Stop" in response.text
     assert "Original" in response.text
     assert "Optimised" in response.text
+
+
+def test_route_sheet_formats_postcode_start_and_missing_end():
+    result = fake_route_result()
+    result["start_address"] = "pl1 2hf"
+    result["end_address"] = ""
+    result["return_to_start"] = False
+    route_id = save_route("Test Driver", result)
+
+    response = client.get(f"/route-sheet/{route_id}")
+
+    assert response.status_code == 200
+    assert "<strong>Start:</strong> PL1 2HF" in response.text
+    assert "End:</strong> Final delivery stop — no return address selected" in response.text
+
+
+def test_recent_routes_endpoint_returns_route_summary(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "recent-routes.db")
+    database.init_db(force=True)
+    route_id = save_route("Test Driver", fake_route_result())
+
+    response = client.get("/api/routes/recent")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    route = data[0]
+    assert route["id"] == route_id
+    assert route["created_at"]
+    assert route["start_address"] == "Plymouth, UK"
+    assert route["end_address"] == "Plymouth, UK"
+    assert route["original_distance_km"] == 12.5
+    assert route["optimised_distance_km"] == 10.0
+    assert route["distance_saved_km"] == 2.5
+    assert route["estimated_saving_percent"] == 20.0
+    assert route["route_sheet_url"] == f"http://testserver/route-sheet/{route_id}"

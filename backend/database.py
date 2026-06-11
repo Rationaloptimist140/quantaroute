@@ -674,32 +674,42 @@ def decode_route_row(row: Any | None) -> dict[str, Any] | None:
     return record
 
 
-def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
+def get_route_history_for_export(limit: int | None = None) -> list[dict[str, Any]]:
     init_db()
     if using_postgres():
+        limit_clause = "LIMIT %s" if limit is not None else ""
         with get_postgres_connection() as conn:
-            rows = conn.execute(
-                f"""
+            query = f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
                 FROM {ROUTE_HISTORY_TABLE}
                 ORDER BY created_at DESC, id DESC
-                LIMIT %s
-                """,
-                (limit,),
+                {limit_clause}
+                """
+            params = (limit,) if limit is not None else ()
+            rows = conn.execute(
+                query,
+                params,
             ).fetchall()
     else:
+        limit_clause = "LIMIT ?" if limit is not None else ""
         with get_sqlite_connection() as conn:
-            rows = conn.execute(
-                f"""
+            query = f"""
                 SELECT {ROUTE_SELECT_COLUMNS}
                 FROM {ROUTE_HISTORY_TABLE}
                 ORDER BY created_at DESC, id DESC
-                LIMIT ?
-                """,
-                (limit,),
+                {limit_clause}
+                """
+            params = (limit,) if limit is not None else ()
+            rows = conn.execute(
+                query,
+                params,
             ).fetchall()
 
     return [record for row in rows if (record := decode_route_row(row)) is not None]
+
+
+def get_recent_routes(limit: int = 50) -> list[dict[str, Any]]:
+    return get_route_history_for_export(limit=limit)
 
 
 def get_route_by_id(route_id: int) -> dict[str, Any] | None:

@@ -68,13 +68,13 @@ def test_api_key_creation_stores_hash_only(tmp_path, monkeypatch):
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "api-key-storage.db")
     database.init_db(force=True)
 
-    created = database.create_api_key("Test Client", monthly_limit=25)
+    created = database.create_api_key("Test Client", monthly_limit=25, notes="Test notes")
     raw_key = created["api_key"]
     key_hash = database.hash_api_key(raw_key)
 
     with database.get_sqlite_connection() as conn:
         row = conn.execute(
-            f"SELECT key_hash, label, monthly_limit FROM {database.API_KEYS_TABLE} WHERE key_hash = ?",
+            f"SELECT key_hash, label, monthly_limit, month_key, notes FROM {database.API_KEYS_TABLE} WHERE key_hash = ?",
             (key_hash,),
         ).fetchone()
 
@@ -83,3 +83,34 @@ def test_api_key_creation_stores_hash_only(tmp_path, monkeypatch):
     assert row["key_hash"] != raw_key
     assert row["label"] == "Test Client"
     assert row["monthly_limit"] == 25
+    assert row["month_key"] == database.current_month_key()
+    assert row["notes"] == "Test notes"
+
+
+def test_usage_event_storage_round_trip(tmp_path, monkeypatch):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "usage-events.db")
+    database.init_db(force=True)
+
+    event_id = database.record_usage_event(
+        route_id=123,
+        api_key_id=456,
+        source="api_key:test",
+        endpoint="/api/optimise-route",
+        status="success",
+        stops_count=4,
+        distance_saved_km=2.5,
+        estimated_saving_percent=20.0,
+    )
+
+    event = database.get_usage_events(limit=1)[0]
+
+    assert event["id"] == event_id
+    assert event["route_id"] == 123
+    assert event["api_key_id"] == 456
+    assert event["source"] == "api_key:test"
+    assert event["endpoint"] == "/api/optimise-route"
+    assert event["status"] == "success"
+    assert event["stops_count"] == 4
+    assert event["distance_saved_km"] == 2.5
+    assert event["estimated_saving_percent"] == 20.0

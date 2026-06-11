@@ -98,6 +98,7 @@ def build_route_sheet_html(route: dict[str, Any]) -> str:
     end_display = format_route_sheet_address(end_address)
     if not end_display:
         end_display = "Final delivery stop — no return address selected"
+    algorithm_used = route.get("algorithm_used") or "Not recorded"
 
     created_at = route.get("created_at") or datetime.now(UTC).strftime("%Y-%m-%d %H:%M")
     maps_url = route.get("maps_url") or route.get("google_maps_url") or ""
@@ -374,6 +375,11 @@ def build_route_sheet_html(route: dict[str, Any]) -> str:
         <div class="address-row"><strong>Start:</strong> {escape(start_display or 'Not provided')}</div>
         <div class="address-row"><strong>End:</strong> {escape(end_display)}</div>
       </div>
+    </section>
+
+    <section class="section">
+      <h2>Route method</h2>
+      <p class="safety">{escape(str(algorithm_used))}</p>
     </section>
 
     <section class="section">

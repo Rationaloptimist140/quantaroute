@@ -3,7 +3,7 @@ from fastapi.testclient import TestClient
 import database
 from backend import main
 from backend.main import app
-from database import create_api_key, get_route_by_id, save_route
+from database import create_api_key, get_route_by_id, get_usage_events, save_route
 
 
 client = TestClient(app)
@@ -45,6 +45,7 @@ def fake_route_result() -> dict:
         "fuel_saving_percent_vs_original": 20.0,
         "maps_url": "https://www.google.com/maps/dir/Plymouth/Stop",
         "whatsapp_url": "https://wa.me/?text=Driver%20route",
+        "algorithm_used": "exact brute force",
         "stops_count": 4,
         "geocoded_count": 4,
         "failed_addresses": [],
@@ -61,10 +62,16 @@ def test_health_includes_safe_storage_diagnostics():
     assert data["storage_backend"] in {"postgres", "sqlite"}
     assert isinstance(data["database_configured"], bool)
     assert isinstance(data["route_history_available"], bool)
+    assert isinstance(data["api_keys_available"], bool)
+    assert isinstance(data["usage_tracking_available"], bool)
     assert "DATABASE_URL" not in data
 
 
-def test_public_api_success(monkeypatch):
+def test_public_api_success(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "public-api-no-key.db")
+    database.init_db(force=True)
+
     async def fake_optimise_route(**_kwargs):
         return fake_route_result()
 
@@ -78,9 +85,13 @@ def test_public_api_success(monkeypatch):
     assert data["google_maps_url"].startswith("https://www.google.com/maps/dir/")
     assert "Tap to open in Google Maps" in data["whatsapp_message"]
     assert data["route_sheet_url"].startswith("http://testserver/route-sheet/")
+    assert data["algorithm_used"] == "exact brute force"
     assert data["api_client"] is None
-    assert data["usage_count_current_month"] is None
-    assert data["monthly_limit"] is None
+    events = get_usage_events(limit=1)
+    assert events[0]["source"] == "public_api"
+    assert events[0]["endpoint"] == "/api/optimise-route"
+    assert events[0]["status"] == "success"
+    assert events[0]["api_key_id"] is None
 
 
 def test_public_api_with_valid_api_key_tracks_usage_and_route_source(monkeypatch, tmp_path):
@@ -107,14 +118,31 @@ def test_public_api_with_valid_api_key_tracks_usage_and_route_source(monkeypatch
     assert response.status_code == 200
     data = response.json()
     assert data["success"] is True
-    assert data["api_client"] == "Courier Bot"
-    assert data["usage_count_current_month"] == 1
-    assert data["monthly_limit"] == 1000
+    assert data["api_client"] == {
+        "label": "Courier Bot",
+        "usage_count_current_month": 1,
+        "monthly_limit": 1000,
+    }
 
     route_id = int(data["route_sheet_url"].rstrip("/").rsplit("/", 1)[-1])
     route = get_route_by_id(route_id)
     assert route is not None
     assert route["source"] == "api_key:courier_bot"
+    events = get_usage_events(limit=1)
+    assert events[0]["route_id"] == route_id
+    assert events[0]["api_key_id"] == api_key["id"]
+    assert events[0]["source"] == "api_key:courier_bot"
+    assert events[0]["stops_count"] == 4
+    assert events[0]["distance_saved_km"] == 2.5
+    assert events[0]["estimated_saving_percent"] == 20.0
+
+    second_response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": api_key["api_key"]},
+    )
+    assert second_response.status_code == 200
+    assert second_response.json()["api_client"]["usage_count_current_month"] == 2
 
 
 def test_public_api_invalid_api_key_rejected(monkeypatch):
@@ -133,6 +161,7 @@ def test_public_api_invalid_api_key_rejected(monkeypatch):
     data = response.json()
     assert data["success"] is False
     assert data["error"]["code"] == "INVALID_API_KEY"
+    assert data["error"]["message"] == "Invalid or inactive API key."
 
 
 def test_public_api_inactive_api_key_rejected(monkeypatch, tmp_path):
@@ -158,6 +187,38 @@ def test_public_api_inactive_api_key_rejected(monkeypatch, tmp_path):
     data = response.json()
     assert data["success"] is False
     assert data["error"]["code"] == "INVALID_API_KEY"
+    assert data["error"]["message"] == "Invalid or inactive API key."
+
+
+def test_public_api_monthly_limit_exceeded(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "monthly-limit-test.db")
+    database.init_db(force=True)
+
+    async def fake_optimise_route(**_kwargs):
+        return fake_route_result()
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+    api_key = create_api_key("Limited Client", monthly_limit=1)
+
+    first_response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": api_key["api_key"]},
+    )
+    assert first_response.status_code == 200
+
+    second_response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-API-Key": api_key["api_key"]},
+    )
+
+    assert second_response.status_code == 429
+    data = second_response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "MONTHLY_LIMIT_EXCEEDED"
+    assert data["error"]["message"] == "This API key has reached its monthly route limit."
 
 
 def test_bad_json_returns_structured_validation_error():
@@ -263,6 +324,8 @@ def test_route_sheet_endpoint_renders_saved_route():
     assert "https://www.google.com/maps/dir/Plymouth/Stop" in response.text
     assert "Original" in response.text
     assert "Optimised" in response.text
+    assert "Route method" in response.text
+    assert "exact brute force" in response.text
 
 
 def test_route_sheet_formats_postcode_start_and_missing_end():

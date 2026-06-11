@@ -1,0 +1,32 @@
+{
+  "optimised_order": [
+    0,
+    1,
+    4,
+    2,
+    3,
+    5,
+    6
+  ],
+  "ordered_addresses": [
+    "{",
+    "\"addresses\": [",
+    "\"Taunton Town Centre, TA1\"",
+    "\"Bristol City Centre, BS1\"",
+    "\"Bath City Centre, BA1\"",
+    "]",
+    "}"
+  ],
+  "total_distance_km": 1232.4,
+  "naive_distance_km": 1744.16,
+  "fuel_saving_percent": 29.34,
+  "maps_url": "https://www.google.com/maps/dir/%7B/%22addresses%22%3A%20%5B/%22Taunton%20Town%20Centre%2C%20TA1%22/%22Bristol%20City%20Centre%2C%20BS1%22/%22Bath%20City%20Centre%2C%20BA1%22/%5D/%7D",
+  "whatsapp_url": "https://wa.me/?text=Hi%20Driver%21%20Your%20optimised%20route%20is%20ready.%20Tap%20to%20open%20in%20Google%20Maps:%20https://www.google.com/maps/dir/%7B/%22addresses%22%3A%20%5B/%22Taunton%20Town%20Centre%2C%20TA1%22/%22Bristol%20City%20Centre%2C%20BS1%22/%22Bath%20City%20Centre%2C%20BA1%22/%5D/%7D",
+  "stops_count": 7,
+  "geocoded_count": 7,
+  "failed_addresses": [
+    "\"driver_name\": \"Test Driver\"",
+    "\"Plymouth City Centre, PL1\"",
+    "\"Exeter City Centre, EX1\""
+  ]
+}

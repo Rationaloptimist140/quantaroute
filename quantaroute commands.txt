@@ -1,0 +1,3 @@
+cd C:\Users\rw718\Desktop\quantaroute
+python backend\main.py
+

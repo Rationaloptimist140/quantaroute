@@ -64,12 +64,15 @@ if ASSETS_DIR.exists():
     app.mount("/assets", StaticFiles(directory=ASSETS_DIR), name="assets")
 
 from database import (
+    api_keys_available,
     get_database_url,
     get_recent_routes,
     get_route_by_id,
     init_db,
     record_allowed_route_use,
+    record_usage_event,
     save_route,
+    usage_tracking_available,
     using_postgres,
     validate_and_record_api_key,
 )
@@ -361,6 +364,7 @@ class RouteResponse(BaseModel):
     maps_url: str
     whatsapp_url: str
     route_sheet_url: str | None = None
+    algorithm_used: str | None = None
     stops_count: int
     geocoded_count: int
     failed_addresses: list[str]
@@ -419,6 +423,12 @@ class PublicRouteError(BaseModel):
     details: list[str] | list[dict] = Field(default_factory=list)
 
 
+class ApiClientMetadata(BaseModel):
+    label: str
+    usage_count_current_month: int
+    monthly_limit: int | None = None
+
+
 class PublicOptimiseRouteSuccess(BaseModel):
     success: bool
     input_stop_count: int
@@ -427,12 +437,11 @@ class PublicOptimiseRouteSuccess(BaseModel):
     optimised_distance_km: float
     distance_saved_km: float
     estimated_saving_percent: float
+    algorithm_used: str | None = None
     google_maps_url: str
     whatsapp_message: str
     route_sheet_url: str | None = None
-    api_client: str | None = None
-    usage_count_current_month: int | None = None
-    monthly_limit: int | None = None
+    api_client: ApiClientMetadata | None = None
     warnings: list[str]
 
     model_config = {
@@ -452,12 +461,15 @@ class PublicOptimiseRouteSuccess(BaseModel):
                 "optimised_distance_km": 19.1,
                 "distance_saved_km": 2.9,
                 "estimated_saving_percent": 13.2,
+                "algorithm_used": "exact brute force",
                 "google_maps_url": "https://www.google.com/maps/dir/Plymouth%2C%20UK/...",
                 "whatsapp_message": "Hi Driver! Your optimised route is ready. Tap to open in Google Maps: https://www.google.com/maps/dir/...",
                 "route_sheet_url": "https://quantaroute.co.uk/route-sheet/123",
-                "api_client": "Example Courier Tool",
-                "usage_count_current_month": 12,
-                "monthly_limit": 1000,
+                "api_client": {
+                    "label": "Example Courier Tool",
+                    "usage_count_current_month": 12,
+                    "monthly_limit": 1000,
+                },
                 "warnings": [
                     "Distance estimates compare route candidates against the address order entered.",
                     "Drivers must follow live road conditions, vehicle restrictions, and professional judgement.",
@@ -493,15 +505,13 @@ def public_api_error(
 
 def api_client_response_metadata(api_client: dict | None) -> dict:
     if not api_client:
-        return {
-            "api_client": None,
-            "usage_count_current_month": None,
-            "monthly_limit": None,
-        }
+        return {"api_client": None}
     return {
-        "api_client": api_client.get("label"),
-        "usage_count_current_month": api_client.get("usage_count_current_month"),
-        "monthly_limit": api_client.get("monthly_limit"),
+        "api_client": {
+            "label": api_client.get("label"),
+            "usage_count_current_month": int(api_client.get("usage_count_current_month") or 0),
+            "monthly_limit": api_client.get("monthly_limit"),
+        }
     }
 
 
@@ -596,7 +606,7 @@ The API returns ordered stops, original distance, optimised distance, distance s
 
 ## API keys
 
-API keys are optional while QuantaRoute is free to test. Paid/API access and higher limits will require API keys later. Raw API keys are not stored.
+API keys are optional while QuantaRoute is free to test. Send X-API-Key when a key is available. Invalid or inactive keys return 401, and keys over their monthly limit return 429. Paid/API access and higher limits will require API keys later. Raw API keys are not stored.
 
 ## Example task
 
@@ -631,6 +641,8 @@ def health():
         "storage_backend": "postgres" if using_postgres() else "sqlite",
         "database_configured": bool(get_database_url()),
         "route_history_available": route_history_available,
+        "api_keys_available": api_keys_available(),
+        "usage_tracking_available": usage_tracking_available(),
     }
 
 
@@ -764,6 +776,10 @@ def route_sheet(route_id: int):
             "model": PublicOptimiseRouteErrorResponse,
             "description": "Invalid or inactive API key.",
         },
+        429: {
+            "model": PublicOptimiseRouteErrorResponse,
+            "description": "API key monthly limit exceeded.",
+        },
         422: {
             "model": PublicOptimiseRouteErrorResponse,
             "description": "Invalid JSON or schema validation error.",
@@ -781,13 +797,13 @@ async def api_optimise_route(
 ):
     api_client: dict | None = None
     if x_api_key:
-        api_key_valid, api_client, api_key_error = validate_and_record_api_key(x_api_key)
+        api_key_valid, api_client, api_key_error_code, api_key_error = validate_and_record_api_key(x_api_key)
         if not api_key_valid:
+            status_code = 429 if api_key_error_code == "MONTHLY_LIMIT_EXCEEDED" else 401
             return public_api_error(
-                401,
-                "INVALID_API_KEY",
-                api_key_error or "API key is invalid or inactive.",
-                ["Remove X-API-Key to use public testing, or use an active API key."],
+                status_code,
+                api_key_error_code or "INVALID_API_KEY",
+                api_key_error or "Invalid or inactive API key.",
             )
 
     clean_start = clean_route_address(route_request.start)
@@ -908,9 +924,11 @@ async def api_optimise_route(
         client_source = api_client.get("source_label") or api_client.get("label") or "api_client"
         route_source = f"api_key:{client_source}"
     else:
-        route_source = request.headers.get("x-quantaroute-source", "api").strip().lower() or "api"
-        if route_source not in {"api", "mcp", "web"}:
-            route_source = "api"
+        route_source = request.headers.get("x-quantaroute-source", "public_api").strip().lower() or "public_api"
+        if route_source == "api":
+            route_source = "public_api"
+        if route_source not in {"public_api", "mcp", "web"}:
+            route_source = "public_api"
     route_id = record_route_history(
         driver_name="API Agent",
         result=result,
@@ -922,6 +940,16 @@ async def api_optimise_route(
         whatsapp_message=whatsapp_message,
     )
     route_sheet_url = build_route_sheet_url(request, route_id) if route_id is not None else None
+    record_usage_event(
+        route_id=route_id,
+        api_key_id=api_client.get("id") if api_client else None,
+        source=route_source,
+        endpoint="/api/optimise-route",
+        status="success",
+        stops_count=len(clean_stops),
+        distance_saved_km=distance_saved,
+        estimated_saving_percent=estimated_saving_percent,
+    )
 
     return {
         "success": True,
@@ -935,6 +963,7 @@ async def api_optimise_route(
         "optimised_distance_km": round(optimised_distance, 2),
         "distance_saved_km": distance_saved,
         "estimated_saving_percent": estimated_saving_percent,
+        "algorithm_used": result.get("algorithm_used"),
         "google_maps_url": google_maps_url,
         "whatsapp_message": whatsapp_message,
         "route_sheet_url": route_sheet_url,

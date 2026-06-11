@@ -30,9 +30,11 @@ export interface OptimiseRouteResult {
   google_maps_url?: string;
   whatsapp_message?: string;
   route_sheet_url?: string;
-  api_client?: string;
-  usage_count_current_month?: number;
-  monthly_limit?: number | null;
+  api_client?: {
+    label: string;
+    usage_count_current_month: number;
+    monthly_limit?: number | null;
+  } | null;
   warnings?: string[];
   error?: RouteError;
 }

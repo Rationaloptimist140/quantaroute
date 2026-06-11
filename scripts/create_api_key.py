@@ -30,12 +30,18 @@ def main() -> None:
         default=None,
         help="Optional route-history source/client label.",
     )
+    parser.add_argument(
+        "--notes",
+        default=None,
+        help="Optional admin notes stored with the key record.",
+    )
     args = parser.parse_args()
 
     record = create_api_key(
         args.label,
         monthly_limit=args.monthly_limit,
         source_label=args.source_label,
+        notes=args.notes,
     )
 
     storage = "Postgres DATABASE_URL" if using_postgres() else "local SQLite"
@@ -43,6 +49,8 @@ def main() -> None:
     print(f"Storage: {storage}")
     print(f"ID: {record['id']}")
     print(f"Label: {record['label']}")
+    monthly_limit = record.get("monthly_limit")
+    print(f"Monthly limit: {monthly_limit if monthly_limit is not None else 'unlimited'}")
     print("Raw key, shown once:")
     print(record["api_key"])
 

@@ -232,6 +232,7 @@ async def optimise_route(
             optimised_dist,
             original_order_distance,
         )
+        algorithm_used = f"input order safety fallback after {algorithm_used}"
         optimised_order = original_order
         optimised_dist = original_order_distance
         fuel_saving = 0.0
@@ -273,6 +274,7 @@ async def optimise_route(
         "nearest_neighbour_distance_km": nearest_neighbour_distance,
         "final_selected_distance_km": final_selected_distance,
         "fuel_saving_percent_vs_original": fuel_saving_vs_original,
+        "algorithm_used": algorithm_used,
         "maps_url": maps_url,
         "whatsapp_url": whatsapp_url,
         "stops_count": len(valid_coords),

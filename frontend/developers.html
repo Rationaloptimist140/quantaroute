@@ -297,7 +297,7 @@
       <h2 id="apiTitle">Public API</h2>
       <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route.</p>
       <p><span class="endpoint">POST /api/optimise-route</span></p>
-      <p class="note"><strong>API keys:</strong> during public testing, API keys are optional. If you have a key, send it with <code>X-API-Key</code>. Paid/API access will require keys later.</p>
+      <p class="note"><strong>API keys:</strong> during public testing, API keys are optional. If you have a key, send it with <code>X-API-Key</code>. Invalid or inactive keys return <code>401</code>; keys that exceed their monthly limit return <code>429</code>. Paid/API access will require keys later.</p>
 
       <div class="grid two">
         <article class="mini-card">
@@ -347,9 +347,11 @@
   "google_maps_url": "https://www.google.com/maps/dir/...",
   "whatsapp_message": "Hi Driver! Your optimised route is ready...",
   "route_sheet_url": "https://quantaroute.co.uk/route-sheet/123",
-  "api_client": "Courier Bot",
-  "usage_count_current_month": 12,
-  "monthly_limit": 1000,
+  "api_client": {
+    "label": "Courier Bot",
+    "usage_count_current_month": 12,
+    "monthly_limit": 1000
+  },
   "warnings": [
     "Distance estimates compare route candidates against the address order entered.",
     "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
@@ -426,10 +428,26 @@ npm start</code></pre>
       <h2 id="keysTitle">API Keys</h2>
       <p class="lead">API keys are being prepared for paid access, rate limits, and partner integrations. They are optional while public testing remains open.</p>
       <p class="note">Keys are stored as one-way hashes. The raw key is only shown once when created.</p>
-      <h3>Create a local/dev key</h3>
+      <p class="note"><strong>Production warning:</strong> running <code>scripts/create_api_key.py</code> locally without <code>DATABASE_URL</code> creates the key in local SQLite, not live Render Postgres. That key will not work against production.</p>
+      <h3>Method 1: local script with production DATABASE_URL</h3>
       <pre><code>cd C:\Users\rw718\Desktop\QuantaRoute
-python scripts\create_api_key.py --label "Courier Bot" --monthly-limit 1000 --source-label courier_bot</code></pre>
-      <p class="note">Use <code>DATABASE_URL</code> before running the script if you want to create the key in a Postgres database instead of local SQLite.</p>
+$env:DATABASE_URL="postgresql://user:password@host:5432/database"
+python scripts\create_api_key.py --label "Rana test key" --monthly-limit 100
+$env:DATABASE_URL=$null</code></pre>
+      <p class="note">Use the Render Postgres connection string for <code>DATABASE_URL</code>. Never commit it or share it in screenshots.</p>
+      <h3>Method 2: Render shell</h3>
+      <pre><code># If the shell starts at the repository root:
+python scripts/create_api_key.py --label "Rana test key" --monthly-limit 100
+
+# If the shell starts in the backend rootDir:
+python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100</code></pre>
+      <p class="note">The Render web service shell should already have the production <code>DATABASE_URL</code> environment variable available. The script prints the raw key once, so store it securely immediately.</p>
+      <h3>Example API call with a key</h3>
+      <pre><code>curl -X POST "https://quantaroute.co.uk/api/optimise-route" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: qr_your_key_here" \
+  -d "{\"start\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"stops\":[\"Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA\",\"Royal William Yard, Plymouth, PL1 3RP\"],\"end\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"vehicle\":\"van\",\"optimise_for\":\"distance\"}"</code></pre>
+      <p class="note">No-key API testing still works while QuantaRoute is in public testing. Keys prepare the product for monthly limits and future paid access.</p>
     </section>
 
     <section class="card" aria-labelledby="docsTitle">

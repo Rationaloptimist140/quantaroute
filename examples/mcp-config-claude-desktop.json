@@ -6,7 +6,8 @@
         "C:\\Users\\rw718\\Desktop\\QuantaRoute\\mcp\\dist\\server.js"
       ],
       "env": {
-        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk"
+        "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk",
+        "QUANTAROUTE_API_KEY": "optional-during-public-testing"
       }
     }
   }

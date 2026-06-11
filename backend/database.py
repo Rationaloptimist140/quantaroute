@@ -60,6 +60,7 @@ ROUTE_SELECT_COLUMNS = """
     source,
     vehicle,
     optimise_for,
+    algorithm_used,
     created_at
 """
 
@@ -85,6 +86,7 @@ SQLITE_ROUTE_COLUMNS = [
     ("source", "TEXT"),
     ("vehicle", "TEXT"),
     ("optimise_for", "TEXT"),
+    ("algorithm_used", "TEXT"),
 ]
 
 
@@ -109,6 +111,7 @@ POSTGRES_ROUTE_COLUMNS = [
     ("source", "TEXT"),
     ("vehicle", "TEXT"),
     ("optimise_for", "TEXT"),
+    ("algorithm_used", "TEXT"),
 ]
 
 
@@ -121,8 +124,48 @@ API_KEY_SELECT_COLUMNS = """
     last_used_at,
     is_active,
     monthly_limit,
-    usage_count_current_month
+    usage_count_current_month,
+    month_key,
+    notes
 """
+
+
+SQLITE_API_KEY_COLUMNS = [
+    ("month_key", "TEXT"),
+    ("notes", "TEXT"),
+]
+
+
+POSTGRES_API_KEY_COLUMNS = [
+    ("month_key", "TEXT"),
+    ("notes", "TEXT"),
+]
+
+
+SQLITE_USAGE_EVENT_COLUMNS = [
+    ("created_at", "TIMESTAMP"),
+    ("route_id", "INTEGER"),
+    ("api_key_id", "INTEGER"),
+    ("source", "TEXT"),
+    ("endpoint", "TEXT"),
+    ("status", "TEXT"),
+    ("stops_count", "INTEGER"),
+    ("distance_saved_km", "REAL"),
+    ("estimated_saving_percent", "REAL"),
+]
+
+
+POSTGRES_USAGE_EVENT_COLUMNS = [
+    ("created_at", "TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP"),
+    ("route_id", "BIGINT"),
+    ("api_key_id", "BIGINT"),
+    ("source", "TEXT"),
+    ("endpoint", "TEXT"),
+    ("status", "TEXT"),
+    ("stops_count", "INTEGER"),
+    ("distance_saved_km", "DOUBLE PRECISION"),
+    ("estimated_saving_percent", "DOUBLE PRECISION"),
+]
 
 
 def get_database_url() -> str:
@@ -232,10 +275,21 @@ def init_sqlite() -> None:
                 identifier TEXT UNIQUE,
                 first_used TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 route_count INTEGER DEFAULT 0,
-                is_paying INTEGER DEFAULT 0
+                is_paying INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                route_id INTEGER,
+                api_key_id INTEGER,
+                source TEXT,
+                endpoint TEXT,
+                status TEXT,
+                stops_count INTEGER,
+                distance_saved_km REAL,
+                estimated_saving_percent REAL
             )
             """
         )
+        for column_name, column_definition in SQLITE_USAGE_EVENT_COLUMNS:
+            ensure_sqlite_column(conn, USAGE_EVENTS_TABLE, column_name, column_definition)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS quantaroute_api_keys (
@@ -247,10 +301,14 @@ def init_sqlite() -> None:
                 last_used_at TIMESTAMP,
                 is_active INTEGER DEFAULT 1,
                 monthly_limit INTEGER,
-                usage_count_current_month INTEGER DEFAULT 0
+                usage_count_current_month INTEGER DEFAULT 0,
+                month_key TEXT,
+                notes TEXT
             )
             """
         )
+        for column_name, column_definition in SQLITE_API_KEY_COLUMNS:
+            ensure_sqlite_column(conn, API_KEYS_TABLE, column_name, column_definition)
         conn.commit()
 
 
@@ -280,10 +338,21 @@ def init_postgres() -> None:
                 identifier TEXT UNIQUE,
                 first_used TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
                 route_count INTEGER DEFAULT 0,
-                is_paying INTEGER DEFAULT 0
+                is_paying INTEGER DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                route_id BIGINT,
+                api_key_id BIGINT,
+                source TEXT,
+                endpoint TEXT,
+                status TEXT,
+                stops_count INTEGER,
+                distance_saved_km DOUBLE PRECISION,
+                estimated_saving_percent DOUBLE PRECISION
             )
             """
         )
+        for column_name, column_definition in POSTGRES_USAGE_EVENT_COLUMNS:
+            ensure_postgres_column(conn, USAGE_EVENTS_TABLE, column_name, column_definition)
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS quantaroute_api_keys (
@@ -295,10 +364,14 @@ def init_postgres() -> None:
                 last_used_at TIMESTAMPTZ,
                 is_active BOOLEAN DEFAULT TRUE,
                 monthly_limit INTEGER,
-                usage_count_current_month INTEGER DEFAULT 0
+                usage_count_current_month INTEGER DEFAULT 0,
+                month_key TEXT,
+                notes TEXT
             )
             """
         )
+        for column_name, column_definition in POSTGRES_API_KEY_COLUMNS:
+            ensure_postgres_column(conn, API_KEYS_TABLE, column_name, column_definition)
 
 
 def init_db(force: bool = False) -> None:
@@ -322,17 +395,25 @@ def generate_api_key() -> str:
     return f"qr_{secrets.token_urlsafe(32)}"
 
 
+def current_month_key(now: datetime | None = None) -> str:
+    timestamp = now or datetime.now(UTC)
+    return timestamp.strftime("%Y-%m")
+
+
 def create_api_key(
     label: str,
     *,
     monthly_limit: int | None = None,
     source_label: str | None = None,
+    notes: str | None = None,
 ) -> dict[str, Any]:
     init_db()
     raw_key = generate_api_key()
     key_hash = hash_api_key(raw_key)
     clean_label = str(label or "API Client").strip() or "API Client"
     clean_source = str(source_label or clean_label).strip() or clean_label
+    clean_notes = str(notes or "").strip() or None
+    month_key = current_month_key()
 
     if using_postgres():
         with get_postgres_connection() as conn:
@@ -342,12 +423,14 @@ def create_api_key(
                     key_hash,
                     label,
                     source_label,
-                    monthly_limit
+                    monthly_limit,
+                    month_key,
+                    notes
                 )
-                VALUES (%s, %s, %s, %s)
-                RETURNING id, label, source_label, monthly_limit, created_at
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, label, source_label, monthly_limit, month_key, notes, created_at
                 """,
-                (key_hash, clean_label, clean_source, monthly_limit),
+                (key_hash, clean_label, clean_source, monthly_limit, month_key, clean_notes),
             ).fetchone()
     else:
         with get_sqlite_connection() as conn:
@@ -357,16 +440,18 @@ def create_api_key(
                     key_hash,
                     label,
                     source_label,
-                    monthly_limit
+                    monthly_limit,
+                    month_key,
+                    notes
                 )
-                VALUES (?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (key_hash, clean_label, clean_source, monthly_limit),
+                (key_hash, clean_label, clean_source, monthly_limit, month_key, clean_notes),
             )
             conn.commit()
             row = conn.execute(
                 """
-                SELECT id, label, source_label, monthly_limit, created_at
+                SELECT id, label, source_label, monthly_limit, month_key, notes, created_at
                 FROM quantaroute_api_keys
                 WHERE id = ?
                 """,
@@ -413,24 +498,46 @@ def should_reset_monthly_usage(last_used_at: Any, now: datetime) -> bool:
     return (last_used.year, last_used.month) != (now.year, now.month)
 
 
-def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | None, str | None]:
+def int_or_none(value: Any) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def validate_and_record_api_key(
+    raw_key: str,
+) -> tuple[bool, dict[str, Any] | None, str | None, str | None]:
     clean_key = str(raw_key or "").strip()
     if not clean_key:
-        return False, None, "API key is empty."
+        return False, None, "INVALID_API_KEY", "Invalid or inactive API key."
 
     key_hash = hash_api_key(clean_key)
     record = get_api_key_by_hash(key_hash)
     if record is None:
-        return False, None, "API key was not recognised."
+        return False, None, "INVALID_API_KEY", "Invalid or inactive API key."
     if not parse_bool(record.get("is_active")):
-        return False, record, "API key is inactive."
+        return False, record, "INVALID_API_KEY", "Invalid or inactive API key."
 
     now = datetime.now(UTC)
-    current_count = int(record.get("usage_count_current_month") or 0)
-    usage_count = 1 if should_reset_monthly_usage(record.get("last_used_at"), now) else current_count + 1
+    month_key = current_month_key(now)
+    stored_month_key = record.get("month_key")
+    should_reset = stored_month_key != month_key or should_reset_monthly_usage(record.get("last_used_at"), now)
+    current_count = 0 if should_reset else int(record.get("usage_count_current_month") or 0)
+    monthly_limit = int_or_none(record.get("monthly_limit"))
+    if monthly_limit is not None and current_count >= monthly_limit:
+        return (
+            False,
+            record,
+            "MONTHLY_LIMIT_EXCEEDED",
+            "This API key has reached its monthly route limit.",
+        )
+
+    usage_count = current_count + 1
     now_value = now.isoformat()
 
-    # TODO: Enforce monthly_limit once paid API plans and customer accounts exist.
     # TODO: Map API keys to Stripe customers/subscriptions before billing launch.
     if using_postgres():
         with get_postgres_connection() as conn:
@@ -438,11 +545,12 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
                 f"""
                 UPDATE quantaroute_api_keys
                 SET last_used_at = %s,
-                    usage_count_current_month = %s
+                    usage_count_current_month = %s,
+                    month_key = %s
                 WHERE id = %s
                 RETURNING {API_KEY_SELECT_COLUMNS}
                 """,
-                (now, usage_count, record["id"]),
+                (now, usage_count, month_key, record["id"]),
             ).fetchone()
     else:
         with get_sqlite_connection() as conn:
@@ -450,10 +558,11 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
                 """
                 UPDATE quantaroute_api_keys
                 SET last_used_at = ?,
-                    usage_count_current_month = ?
+                    usage_count_current_month = ?,
+                    month_key = ?
                 WHERE id = ?
                 """,
-                (now_value, usage_count, record["id"]),
+                (now_value, usage_count, month_key, record["id"]),
             )
             conn.commit()
             row = conn.execute(
@@ -465,7 +574,7 @@ def validate_and_record_api_key(raw_key: str) -> tuple[bool, dict[str, Any] | No
                 (record["id"],),
             ).fetchone()
 
-    return True, dict(row), None
+    return True, dict(row), None, None
 
 
 def json_list(value: Any) -> str:
@@ -546,6 +655,7 @@ def build_route_record(
         "source": source,
         "vehicle": vehicle,
         "optimise_for": optimise_for,
+        "algorithm_used": result.get("algorithm_used"),
     }
 
 
@@ -735,6 +845,112 @@ def get_route_by_id(route_id: int) -> dict[str, Any] | None:
                 (route_id,),
             ).fetchone()
     return decode_route_row(row)
+
+
+def record_usage_event(
+    *,
+    route_id: int | None = None,
+    api_key_id: int | None = None,
+    source: str = "public_api",
+    endpoint: str = "/api/optimise-route",
+    status: str = "success",
+    stops_count: int = 0,
+    distance_saved_km: float | None = None,
+    estimated_saving_percent: float | None = None,
+) -> int:
+    init_db()
+    created_at = datetime.now(UTC).isoformat()
+    record = {
+        "created_at": created_at,
+        "route_id": route_id,
+        "api_key_id": api_key_id,
+        "source": str(source or "public_api"),
+        "endpoint": str(endpoint or "/api/optimise-route"),
+        "status": str(status or "success"),
+        "stops_count": int(stops_count or 0),
+        "distance_saved_km": distance_saved_km,
+        "estimated_saving_percent": estimated_saving_percent,
+    }
+    columns = list(record)
+    values = [record[column] for column in columns]
+
+    if using_postgres():
+        placeholders = ", ".join(["%s"] * len(columns))
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                INSERT INTO {USAGE_EVENTS_TABLE} ({", ".join(columns)})
+                VALUES ({placeholders})
+                RETURNING id
+                """,
+                values,
+            ).fetchone()
+        return int(row["id"])
+
+    placeholders = ", ".join(["?"] * len(columns))
+    with get_sqlite_connection() as conn:
+        cursor = conn.execute(
+            f"""
+            INSERT INTO {USAGE_EVENTS_TABLE} ({", ".join(columns)})
+            VALUES ({placeholders})
+            """,
+            values,
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def get_usage_events(limit: int = 50) -> list[dict[str, Any]]:
+    init_db()
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, created_at, route_id, api_key_id, source, endpoint, status,
+                       stops_count, distance_saved_km, estimated_saving_percent
+                FROM {USAGE_EVENTS_TABLE}
+                WHERE endpoint IS NOT NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT %s
+                """,
+                (limit,),
+            ).fetchall()
+    else:
+        with get_sqlite_connection() as conn:
+            rows = conn.execute(
+                f"""
+                SELECT id, created_at, route_id, api_key_id, source, endpoint, status,
+                       stops_count, distance_saved_km, estimated_saving_percent
+                FROM {USAGE_EVENTS_TABLE}
+                WHERE endpoint IS NOT NULL
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def table_available(table_name: str) -> bool:
+    try:
+        init_db()
+        if using_postgres():
+            with get_postgres_connection() as conn:
+                conn.execute(f"SELECT 1 FROM {table_name} LIMIT 1").fetchone()
+        else:
+            with get_sqlite_connection() as conn:
+                conn.execute(f"SELECT 1 FROM {table_name} LIMIT 1").fetchone()
+        return True
+    except Exception:
+        return False
+
+
+def api_keys_available() -> bool:
+    return table_available(API_KEYS_TABLE)
+
+
+def usage_tracking_available() -> bool:
+    return table_available(USAGE_EVENTS_TABLE)
 
 
 def get_or_create_user(identifier: str) -> dict[str, Any]:

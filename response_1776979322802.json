@@ -1,0 +1,20 @@
+{
+  "optimised_order": [
+    0,
+    3,
+    1,
+    2
+  ],
+  "ordered_addresses": [
+    "PL1 2AB, Plymouth",
+    "PL3 4BB, Plymouth",
+    "PL4 6AB, Plymouth",
+    "PL2 1AA, Plymouth"
+  ],
+  "total_distance_km": 11.41,
+  "naive_distance_km": 11.73,
+  "fuel_saving_percent": 2.73,
+  "maps_url": "https://www.google.com/maps/dir/50.372535,-4.1452755/50.3821,-4.1609/50.3774728,-4.1436974/50.3784078,-4.1099232",
+  "whatsapp_url": "https://wa.me/?text=Hi%20Driver%21%20Your%20optimised%20route%20is%20ready.%20Tap%20to%20open%20in%20Google%20Maps%3A%20https%3A//www.google.com/maps/dir/50.372535%2C-4.1452755/50.3821%2C-4.1609/50.3774728%2C-4.1436974/50.3784078%2C-4.1099232",
+  "stops_count": 4
+}

@@ -49,12 +49,13 @@ X-API-Key: qr_your_key_here
 }
 ```
 
-The endpoint returns ordered stops, original and optimised distance estimates, distance saved, estimated saving percentage, a Google Maps URL, a WhatsApp driver message, printable route sheet URL, and warnings.
+The endpoint returns ordered stops, original and optimised distance estimates, distance saved, estimated saving percentage, a Google Maps URL, a WhatsApp driver message, printable route sheet URL, optional API-client metadata, and warnings.
 
-When a valid API key is supplied, the response can include `api_client`,
-`usage_count_current_month`, and `monthly_limit`. Invalid or inactive keys are
-rejected with structured `401` JSON. Requests without a key still work during
-public testing.
+When a valid API key is supplied, the response includes an `api_client` object
+with `label`, `usage_count_current_month`, and `monthly_limit`. Invalid or
+inactive keys are rejected with structured `401` JSON. Keys that exceed their
+monthly limit return structured `429` JSON. Requests without a key still work
+during public testing.
 
 ## API Keys
 
@@ -62,16 +63,73 @@ API keys are optional while QuantaRoute is free to test. They are being prepared
 for future paid API access, rate limits, and per-route billing. Raw keys are not
 stored; the backend stores a SHA-256 hash.
 
-Create a local/dev key:
+Important: `scripts/create_api_key.py` writes to whichever storage backend the
+script can see. If you run it locally without `DATABASE_URL`, it creates the key
+in local SQLite at `backend/quantaroute.db`. That local key will not exist in
+live Render Postgres and will not work against production.
+
+Create a local/dev SQLite key:
 
 ```powershell
 cd C:\Users\rw718\Desktop\QuantaRoute
 python scripts\create_api_key.py --label "Courier Bot" --monthly-limit 1000 --source-label courier_bot
 ```
 
-To create a key in production Postgres, set `DATABASE_URL` in the shell running
-the script, or run the same helper in an environment where `DATABASE_URL` points
-at the production database.
+### Create a Production API Key
+
+Method 1: run the local script with production `DATABASE_URL` set.
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+$env:DATABASE_URL="postgresql://user:password@host:5432/database"
+python scripts\create_api_key.py --label "Rana test key" --monthly-limit 100
+$env:DATABASE_URL=$null
+```
+
+Use the Render Postgres connection string for `DATABASE_URL`. Do not commit it,
+paste it into docs, or share it in screenshots.
+
+Method 2: use a Render shell if available.
+
+Open a shell for the QuantaRoute Render web service, confirm the service has
+`DATABASE_URL` configured, then run one of these depending on the shell's
+working directory:
+
+```bash
+# If the shell starts at the repository root:
+python scripts/create_api_key.py --label "Rana test key" --monthly-limit 100
+
+# If the shell starts in the backend rootDir:
+python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100
+```
+
+The script prints the raw key once. Store it securely immediately.
+
+Example API call with a key:
+
+```powershell
+$headers = @{ "X-API-Key" = "qr_your_key_here" }
+$body = @{
+  start = "Plymouth Railway Station, North Road, Plymouth, PL4 6AB"
+  stops = @(
+    "Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA",
+    "Royal William Yard, Plymouth, PL1 3RP"
+  )
+  end = "Plymouth Railway Station, North Road, Plymouth, PL4 6AB"
+  vehicle = "van"
+  optimise_for = "distance"
+} | ConvertTo-Json
+
+Invoke-RestMethod -Method Post `
+  -Uri "https://quantaroute.co.uk/api/optimise-route" `
+  -ContentType "application/json" `
+  -Headers $headers `
+  -Body $body
+```
+
+The raw key is shown once by the creation script. QuantaRoute stores only a
+SHA-256 hash, plus safe metadata such as label, monthly limit, current month
+usage count, and notes.
 
 ## Agent-Ready Direction
 

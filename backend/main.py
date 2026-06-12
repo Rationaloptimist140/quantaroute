@@ -77,7 +77,12 @@ from database import (
     validate_and_record_api_key,
 )
 
-init_db()
+try:
+    init_db()
+except Exception:
+    logger.exception(
+        "Database initialisation failed during startup; continuing so /health can report diagnostics."
+    )
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
 

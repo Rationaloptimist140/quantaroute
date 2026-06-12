@@ -52,8 +52,23 @@ def fake_route_result() -> dict:
     }
 
 
-def test_health_includes_safe_storage_diagnostics():
+def test_health_is_lightweight():
     response = client.get("/health")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["build"] == "health-storage-backend-2026-06-11"
+    assert data["storage_backend"] in {"postgres", "sqlite"}
+    assert isinstance(data["database_configured"], bool)
+    assert "route_history_available" not in data
+    assert "api_keys_available" not in data
+    assert "usage_tracking_available" not in data
+    assert "DATABASE_URL" not in data
+
+
+def test_deep_health_includes_safe_storage_diagnostics():
+    response = client.get("/health/deep")
 
     assert response.status_code == 200
     data = response.json()

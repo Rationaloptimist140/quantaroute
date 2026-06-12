@@ -632,6 +632,18 @@ hi@quantaroute.co.uk
 
 @app.get("/health")
 def health():
+    return {
+        "status": "ok",
+        "service": "QuantaRoute API",
+        "version": "1.0.0",
+        "build": APP_BUILD,
+        "storage_backend": "postgres" if using_postgres() else "sqlite",
+        "database_configured": bool(get_database_url()),
+    }
+
+
+@app.get("/health/deep")
+def health_deep():
     try:
         get_recent_routes(limit=1)
         route_history_available = True

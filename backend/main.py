@@ -87,6 +87,11 @@ UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
 DEV_USAGE_BYPASS_ENV = "QUANTAROUTE_DEV_BYPASS_USAGE_LIMIT"
 LOCAL_TEST_HOSTS = {"testserver", "localhost", "127.0.0.1", "::1"}
+DEV_BYPASS_BANNER_TEXT = "DEV BYPASS ACTIVE -- usage limit disabled for local testing"
+NO_STORE_HEADERS = {
+    "Cache-Control": "no-store, max-age=0",
+    "Pragma": "no-cache",
+}
 
 # TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
 # TODO: Add future per-route billing once Stripe checkout is active.
@@ -698,22 +703,48 @@ def health_deep():
 def llms_txt():
     return PlainTextResponse(LLMS_TXT, media_type="text/plain; charset=utf-8")
 
-def frontend_file(filename: str) -> FileResponse:
+
+def inject_dev_bypass_banner(html: str) -> str:
+    """Add a clear local-only warning banner to the optimiser page."""
+    banner_style = "; ".join(
+        [
+            "position: sticky",
+            "top: 0",
+            "z-index: 9999",
+            "padding: 10px 14px",
+            "background: #7f1d1d",
+            "color: #ffffff",
+            "font-weight: 700",
+            "text-align: center",
+            "letter-spacing: 0",
+            "box-shadow: 0 2px 8px rgba(0,0,0,0.18)",
+        ]
+    )
+    banner = f"""
+  <div role="status" aria-label="Development usage bypass active" style="{banner_style};">
+    {DEV_BYPASS_BANNER_TEXT}
+  </div>"""
+    return html.replace("<body>", f"<body>{banner}", 1)
+
+
+def frontend_file(filename: str, request: Request | None = None) -> FileResponse | HTMLResponse:
     file_path = FRONTEND_DIR / filename
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Frontend not found")
+    if filename == "index.html" and request is not None and should_bypass_usage_limit(request):
+        return HTMLResponse(
+            inject_dev_bypass_banner(file_path.read_text(encoding="utf-8")),
+            headers=NO_STORE_HEADERS,
+        )
     return FileResponse(
         file_path,
-        headers={
-            "Cache-Control": "no-store, max-age=0",
-            "Pragma": "no-cache",
-        },
+        headers=NO_STORE_HEADERS,
     )
 
 @app.get("/", include_in_schema=False)
 @app.get("/index.html", include_in_schema=False)
-def frontend():
-    return frontend_file("index.html")
+def frontend(request: Request):
+    return frontend_file("index.html", request)
 
 @app.get("/landing", include_in_schema=False)
 @app.get("/landing.html", include_in_schema=False)

@@ -95,6 +95,42 @@ def test_deep_health_includes_safe_storage_diagnostics():
     assert "DATABASE_URL" not in data
 
 
+def test_frontend_hides_dev_bypass_banner_by_default(monkeypatch):
+    """The optimiser page does not show the bypass banner unless the flag is set."""
+    monkeypatch.delenv(main.DEV_USAGE_BYPASS_ENV, raising=False)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert main.DEV_BYPASS_BANNER_TEXT not in response.text
+
+
+def test_frontend_shows_dev_bypass_banner_for_local_flag(monkeypatch):
+    """Local bypass mode shows an unmistakable warning on the optimiser page."""
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert main.DEV_BYPASS_BANNER_TEXT in response.text
+
+
+def test_frontend_dev_bypass_banner_is_hidden_on_render(monkeypatch):
+    """Render-like environments ignore the bypass flag and hide the banner."""
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert main.DEV_BYPASS_BANNER_TEXT not in response.text
+
+
 def test_public_api_success(monkeypatch, tmp_path):
     monkeypatch.delenv("DATABASE_URL", raising=False)
     monkeypatch.setattr(database, "DB_PATH", tmp_path / "public-api-no-key.db")

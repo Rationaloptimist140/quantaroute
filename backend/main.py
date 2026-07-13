@@ -31,6 +31,12 @@ from services.route_builder import (
     optimise_route,
 )
 from services.route_sheet import build_route_sheet_html
+from services.stripe_billing import (
+    create_checkout_session,
+    get_webhook_secret,
+    process_verified_stripe_event,
+    verify_stripe_event,
+)
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -525,6 +531,18 @@ class PublicOptimiseRouteErrorResponse(BaseModel):
     error: PublicRouteError
 
 
+class CreateCheckoutSessionRequest(BaseModel):
+    customer_email: str | None = Field(
+        default=None,
+        description="Optional email address to prefill in Stripe Checkout.",
+    )
+
+
+class CreateCheckoutSessionResponse(BaseModel):
+    checkout_url: str
+    session_id: str
+
+
 def public_api_error(
     status_code: int,
     code: str,
@@ -759,6 +777,100 @@ def developers_page():
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
     return frontend_file("landing.html")
+
+
+@app.post(
+    "/api/billing/create-checkout-session",
+    response_model=CreateCheckoutSessionResponse,
+    tags=["Billing"],
+)
+def create_billing_checkout_session(
+    checkout_request: CreateCheckoutSessionRequest,
+    request: Request,
+):
+    identifier = get_client_identifier(request)
+    base_url = str(request.base_url).rstrip("/")
+    try:
+        session = create_checkout_session(
+            identifier=identifier,
+            success_url=f"{base_url}/billing/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_url}/billing/cancel",
+            customer_email=checkout_request.customer_email,
+        )
+    except RuntimeError as e:
+        logger.warning("Stripe Checkout is not configured: %s", e)
+        return JSONResponse(
+            status_code=503,
+            content={
+                "success": False,
+                "error": {
+                    "code": "STRIPE_NOT_CONFIGURED",
+                    "message": "Stripe Checkout is not configured.",
+                },
+            },
+        )
+    except Exception as e:
+        logger.error("Stripe Checkout session creation failed: %s", e)
+        return JSONResponse(
+            status_code=502,
+            content={
+                "success": False,
+                "error": {
+                    "code": "STRIPE_CHECKOUT_FAILED",
+                    "message": "Could not start Stripe Checkout.",
+                },
+            },
+        )
+
+    return {
+        "checkout_url": session.get("url", ""),
+        "session_id": session.get("id", ""),
+    }
+
+
+@app.get("/billing/success", response_class=HTMLResponse, include_in_schema=False)
+def billing_success():
+    return HTMLResponse(
+        "<h1>Payment received</h1><p>Your QuantaRoute paid access is being activated. You can return to the route optimiser.</p>"
+    )
+
+
+@app.get("/billing/cancel", response_class=HTMLResponse, include_in_schema=False)
+def billing_cancel():
+    return HTMLResponse(
+        "<h1>Checkout cancelled</h1><p>No payment was taken. You can return to QuantaRoute and try again when ready.</p>"
+    )
+
+
+@app.post("/api/stripe/webhook", include_in_schema=False)
+async def stripe_webhook(request: Request):
+    raw_body = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+    try:
+        event = verify_stripe_event(raw_body, signature, get_webhook_secret())
+    except RuntimeError:
+        logger.error("Stripe webhook secret is not configured.")
+        return JSONResponse(
+            status_code=503,
+            content={"success": False, "error": "Stripe webhook is not configured."},
+        )
+    except Exception as e:
+        logger.warning("Stripe webhook verification failed: %s", e)
+        return JSONResponse(
+            status_code=400,
+            content={"success": False, "error": "Invalid Stripe webhook signature."},
+        )
+
+    try:
+        result = process_verified_stripe_event(event)
+    except Exception as e:
+        logger.error("Stripe webhook processing failed: %s", e)
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "error": "Stripe webhook processing failed."},
+        )
+    return {"success": True, **result}
+
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(

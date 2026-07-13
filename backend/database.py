@@ -29,6 +29,7 @@ _SCHEMA_READY_FOR: str | None = None
 ROUTE_HISTORY_TABLE = "quantaroute_route_history"
 API_KEYS_TABLE = "quantaroute_api_keys"
 USAGE_EVENTS_TABLE = "quantaroute_usage_events"
+STRIPE_EVENTS_TABLE = "quantaroute_stripe_events"
 
 
 ROUTE_SELECT_COLUMNS = """
@@ -152,6 +153,10 @@ SQLITE_USAGE_EVENT_COLUMNS = [
     ("stops_count", "INTEGER"),
     ("distance_saved_km", "REAL"),
     ("estimated_saving_percent", "REAL"),
+    ("stripe_customer_id", "TEXT"),
+    ("stripe_subscription_id", "TEXT"),
+    ("paid_access_updated_at", "TIMESTAMP"),
+    ("stripe_access_event_created", "INTEGER"),
 ]
 
 
@@ -165,6 +170,10 @@ POSTGRES_USAGE_EVENT_COLUMNS = [
     ("stops_count", "INTEGER"),
     ("distance_saved_km", "DOUBLE PRECISION"),
     ("estimated_saving_percent", "DOUBLE PRECISION"),
+    ("stripe_customer_id", "TEXT"),
+    ("stripe_subscription_id", "TEXT"),
+    ("paid_access_updated_at", "TIMESTAMPTZ"),
+    ("stripe_access_event_created", "BIGINT"),
 ]
 
 
@@ -309,6 +318,16 @@ def init_sqlite() -> None:
         )
         for column_name, column_definition in SQLITE_API_KEY_COLUMNS:
             ensure_sqlite_column(conn, API_KEYS_TABLE, column_name, column_definition)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quantaroute_stripe_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                stripe_event_id TEXT UNIQUE NOT NULL,
+                event_type TEXT,
+                processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         conn.commit()
 
 
@@ -372,6 +391,16 @@ def init_postgres() -> None:
         )
         for column_name, column_definition in POSTGRES_API_KEY_COLUMNS:
             ensure_postgres_column(conn, API_KEYS_TABLE, column_name, column_definition)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quantaroute_stripe_events (
+                id BIGSERIAL PRIMARY KEY,
+                stripe_event_id TEXT UNIQUE NOT NULL,
+                event_type TEXT,
+                processed_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
 
 
 def init_db(force: bool = False) -> None:
@@ -1027,3 +1056,197 @@ def record_allowed_route_use(identifier: str) -> tuple[bool, dict[str, Any]]:
 
     user = get_or_create_user(identifier)
     return True, user
+
+
+def set_paid_access(
+    identifier: str,
+    is_paying: bool,
+    *,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
+    stripe_event_created: int | None = None,
+) -> dict[str, Any]:
+    """Update paid access for the usage identifier used by the billing gate."""
+    user = get_or_create_user(identifier)
+    paid_value = 1 if is_paying else 0
+    updated_at = datetime.now(UTC)
+    event_created = int(stripe_event_created or updated_at.timestamp())
+
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                UPDATE {USAGE_EVENTS_TABLE}
+                SET is_paying = %s,
+                    stripe_customer_id = COALESCE(%s, stripe_customer_id),
+                    stripe_subscription_id = COALESCE(%s, stripe_subscription_id),
+                    paid_access_updated_at = %s,
+                    stripe_access_event_created = %s
+                WHERE identifier = %s
+                  AND (
+                    stripe_access_event_created IS NULL
+                    OR stripe_access_event_created <= %s
+                  )
+                RETURNING id, identifier, first_used, route_count, is_paying
+                """,
+                (
+                    bool(is_paying),
+                    stripe_customer_id,
+                    stripe_subscription_id,
+                    updated_at,
+                    event_created,
+                    user["identifier"],
+                    event_created,
+                ),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                f"""
+                UPDATE {USAGE_EVENTS_TABLE}
+                SET is_paying = ?,
+                    stripe_customer_id = COALESCE(?, stripe_customer_id),
+                    stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+                    paid_access_updated_at = ?,
+                    stripe_access_event_created = ?
+                WHERE identifier = ?
+                  AND (
+                    stripe_access_event_created IS NULL
+                    OR stripe_access_event_created <= ?
+                  )
+                """,
+                (
+                    paid_value,
+                    stripe_customer_id,
+                    stripe_subscription_id,
+                    updated_at.isoformat(),
+                    event_created,
+                    user["identifier"],
+                    event_created,
+                ),
+            )
+            conn.commit()
+            row = conn.execute(
+                f"""
+                SELECT id, identifier, first_used, route_count, is_paying
+                FROM {USAGE_EVENTS_TABLE}
+                WHERE identifier = ?
+                """,
+                (user["identifier"],),
+            ).fetchone()
+
+    return dict(row) if row is not None else get_or_create_user(identifier)
+
+
+def record_stripe_event_once(stripe_event_id: str, event_type: str) -> bool:
+    """Record a Stripe event id and return false when it was already handled."""
+    init_db()
+    clean_event_id = str(stripe_event_id or "").strip()
+    if not clean_event_id:
+        raise ValueError("Stripe event id is required")
+
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                INSERT INTO {STRIPE_EVENTS_TABLE} (stripe_event_id, event_type)
+                VALUES (%s, %s)
+                ON CONFLICT (stripe_event_id) DO NOTHING
+                RETURNING id
+                """,
+                (clean_event_id, str(event_type or "")),
+            ).fetchone()
+        return row is not None
+
+    try:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                f"""
+                INSERT INTO {STRIPE_EVENTS_TABLE} (stripe_event_id, event_type)
+                VALUES (?, ?)
+                """,
+                (clean_event_id, str(event_type or "")),
+            )
+            conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+
+
+def set_paid_access_for_stripe_customer(
+    stripe_customer_id: str,
+    is_paying: bool,
+    *,
+    stripe_subscription_id: str | None = None,
+    stripe_event_created: int | None = None,
+) -> dict[str, Any] | None:
+    """Update paid access for an existing Stripe customer mapping."""
+    init_db()
+    customer_id = str(stripe_customer_id or "").strip()
+    if not customer_id:
+        return None
+
+    paid_value = 1 if is_paying else 0
+    updated_at = datetime.now(UTC)
+    event_created = int(stripe_event_created or updated_at.timestamp())
+
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                UPDATE {USAGE_EVENTS_TABLE}
+                SET is_paying = %s,
+                    stripe_subscription_id = COALESCE(%s, stripe_subscription_id),
+                    paid_access_updated_at = %s,
+                    stripe_access_event_created = %s
+                WHERE stripe_customer_id = %s
+                  AND (
+                    stripe_access_event_created IS NULL
+                    OR stripe_access_event_created <= %s
+                  )
+                RETURNING id, identifier, first_used, route_count, is_paying
+                """,
+                (
+                    bool(is_paying),
+                    stripe_subscription_id,
+                    updated_at,
+                    event_created,
+                    customer_id,
+                    event_created,
+                ),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                f"""
+                UPDATE {USAGE_EVENTS_TABLE}
+                SET is_paying = ?,
+                    stripe_subscription_id = COALESCE(?, stripe_subscription_id),
+                    paid_access_updated_at = ?,
+                    stripe_access_event_created = ?
+                WHERE stripe_customer_id = ?
+                  AND (
+                    stripe_access_event_created IS NULL
+                    OR stripe_access_event_created <= ?
+                  )
+                """,
+                (
+                    paid_value,
+                    stripe_subscription_id,
+                    updated_at.isoformat(),
+                    event_created,
+                    customer_id,
+                    event_created,
+                ),
+            )
+            conn.commit()
+            row = conn.execute(
+                f"""
+                SELECT id, identifier, first_used, route_count, is_paying
+                FROM {USAGE_EVENTS_TABLE}
+                WHERE stripe_customer_id = ?
+                """,
+                (customer_id,),
+            ).fetchone()
+
+    return dict(row) if row is not None else None

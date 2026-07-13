@@ -85,6 +85,8 @@ except Exception:
     )
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
+DEV_USAGE_BYPASS_ENV = "QUANTAROUTE_DEV_BYPASS_USAGE_LIMIT"
+LOCAL_TEST_HOSTS = {"testserver", "localhost", "127.0.0.1", "::1"}
 
 # TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
 # TODO: Add future per-route billing once Stripe checkout is active.
@@ -170,7 +172,36 @@ def get_client_identifier(request: Request) -> str:
     return "unknown"
 
 
+def env_flag_enabled(name: str) -> bool:
+    """Return true when an environment flag is explicitly enabled."""
+    return os.getenv(name, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def is_local_or_test_request(request: Request) -> bool:
+    """Return true for local development and TestClient requests only."""
+    host = (request.url.hostname or "").strip().lower()
+    client_host = (request.client.host if request.client else "").strip().lower()
+    return host in LOCAL_TEST_HOSTS or client_host in LOCAL_TEST_HOSTS
+
+
+def should_bypass_usage_limit(request: Request) -> bool:
+    """Allow billing-gate bypass only for explicit local/dev test runs."""
+    if not env_flag_enabled(DEV_USAGE_BYPASS_ENV):
+        return False
+    if env_flag_enabled("RENDER") or os.getenv("RENDER_SERVICE_ID"):
+        logger.warning("Ignoring %s on Render.", DEV_USAGE_BYPASS_ENV)
+        return False
+    if os.getenv("ENVIRONMENT", "").strip().lower() in {"production", "prod"}:
+        logger.warning("Ignoring %s in production environment.", DEV_USAGE_BYPASS_ENV)
+        return False
+    return is_local_or_test_request(request)
+
+
 def enforce_usage_limit(request: Request) -> JSONResponse | None:
+    if should_bypass_usage_limit(request):
+        logger.info("Usage limit bypassed for local/dev test request.")
+        return None
+
     identifier = get_client_identifier(request)
     allowed, user = record_allowed_route_use(identifier)
     if allowed:

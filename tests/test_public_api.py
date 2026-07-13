@@ -1,3 +1,5 @@
+from datetime import UTC, datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 import database
@@ -50,6 +52,17 @@ def fake_route_result() -> dict:
         "geocoded_count": 4,
         "failed_addresses": [],
     }
+
+
+def expire_usage_identifier(identifier: str) -> None:
+    old_first_used = (datetime.now(UTC) - timedelta(days=31)).isoformat()
+    database.record_allowed_route_use(identifier)
+    with database.get_sqlite_connection() as conn:
+        conn.execute(
+            f"UPDATE {database.USAGE_EVENTS_TABLE} SET first_used = ? WHERE identifier = ?",
+            (old_first_used, identifier),
+        )
+        conn.commit()
 
 
 def test_health_is_lightweight():
@@ -107,6 +120,91 @@ def test_public_api_success(monkeypatch, tmp_path):
     assert events[0]["endpoint"] == "/api/optimise-route"
     assert events[0]["status"] == "success"
     assert events[0]["api_key_id"] is None
+
+
+def test_public_api_expired_free_trial_still_returns_payment_required(
+    monkeypatch,
+    tmp_path,
+):
+    """Expired unauthenticated users still hit the billing gate by default."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv(main.DEV_USAGE_BYPASS_ENV, raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "expired-trial-test.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    async def fake_optimise_route(**_kwargs):
+        raise AssertionError("optimise_route should not run for expired users")
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 402
+    data = response.json()
+    assert data["success"] is False
+    assert data["error"]["code"] == "PAYMENT_REQUIRED"
+
+
+def test_public_api_dev_bypass_allows_local_route_validation(
+    monkeypatch,
+    tmp_path,
+):
+    """The explicit dev/test bypass skips billing only for local requests."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "dev-bypass-test.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    async def fake_optimise_route(**_kwargs):
+        return fake_route_result()
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["success"] is True
+    assert data["algorithm_used"] == "exact brute force"
+
+
+def test_public_api_dev_bypass_is_ignored_on_render(monkeypatch, tmp_path):
+    """The bypass flag cannot skip billing in a Render-like environment."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "render-bypass-test.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    async def fake_optimise_route(**_kwargs):
+        raise AssertionError("optimise_route should not run when Render ignores bypass")
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    response = client.post(
+        "/api/optimise-route",
+        json=sample_payload(),
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 402
+    assert response.json()["error"]["code"] == "PAYMENT_REQUIRED"
 
 
 def test_public_api_with_valid_api_key_tracks_usage_and_route_source(monkeypatch, tmp_path):

@@ -285,7 +285,11 @@ def test_duplicate_only_stop_list_rejected():
     assert data["error"]["code"] == "INVALID_STOPS"
 
 
-def test_failed_geocoding_returns_clear_error(monkeypatch):
+def test_failed_geocoding_returns_clear_error(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "failed-geocoding-test.db")
+    database.init_db(force=True)
+
     async def fake_optimise_route(**_kwargs):
         raise main.RouteGeocodingError(["Bad Stop"])
 

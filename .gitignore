@@ -10,3 +10,5 @@ node_modules/
 dist/
 mcp/node_modules/
 mcp/dist/
+exports/
+QuantaRoute Route Sheet #*.pdf

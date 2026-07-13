@@ -535,3 +535,28 @@ Suggested scope:
 This gives QuantaRoute a research bridge to Strangeworks/QUBO experiments
 without making live courier routing depend on quantum/hybrid solver latency,
 availability, or result quality.
+
+## Offline Export Helper
+
+Use `scripts/export_route_problem.py` to create JSON payloads for future
+Strangeworks/QUBO/QAOA experiments. This is for offline research/benchmarking
+only. Production routing does not depend on external quantum solvers.
+
+Demo export, with no database, secrets, geocoding calls, routing calls, or
+external solver calls:
+
+```powershell
+python scripts/export_route_problem.py --demo --out exports/plymouth_route_problem.json
+```
+
+Saved route metadata export, using `DATABASE_URL` when configured and local
+SQLite otherwise:
+
+```powershell
+python scripts/export_route_problem.py --route-id 123 --out exports/route_123_problem.json
+```
+
+Saved route history currently does not store the original distance matrix, so
+`distance_matrix_km` is `null` for `--route-id` exports. Use `--demo` for a
+complete static matrix export until matrix capture is added behind an explicit
+experimental flag.

@@ -72,9 +72,11 @@ if ASSETS_DIR.exists():
 from database import (
     api_keys_available,
     get_database_url,
+    get_or_create_user,
     get_recent_routes,
     get_route_by_id,
     init_db,
+    is_within_free_month,
     record_allowed_route_use,
     record_usage_event,
     save_route,
@@ -230,6 +232,41 @@ def enforce_usage_limit(request: Request) -> JSONResponse | None:
             "upgrade_url": UPGRADE_URL,
         },
     )
+
+
+def boolish(value) -> bool:
+    """Parse SQLite/Postgres boolean-ish values consistently."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return bool(value)
+    return str(value or "").strip().lower() in {"1", "t", "true", "yes", "y"}
+
+
+def build_usage_status(request: Request) -> dict:
+    """Return the current usage gate state without recording route usage."""
+    if should_bypass_usage_limit(request):
+        return {
+            "has_access": True,
+            "is_within_trial": True,
+            "is_paying": True,
+            "dev_bypass_active": True,
+            "route_count": 0,
+            "upgrade_url": UPGRADE_URL,
+        }
+
+    user = get_or_create_user(get_client_identifier(request))
+    is_paying = boolish(user.get("is_paying"))
+    is_within_trial = is_within_free_month(user.get("first_used"))
+    return {
+        "has_access": is_within_trial or is_paying,
+        "is_within_trial": is_within_trial,
+        "is_paying": is_paying,
+        "dev_bypass_active": False,
+        "route_count": int(user.get("route_count") or 0),
+        "upgrade_url": UPGRADE_URL,
+    }
+
 
 def is_csv_header_row(cells: list[str]) -> bool:
     headers = {
@@ -777,6 +814,12 @@ def developers_page():
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
     return frontend_file("landing.html")
+
+
+@app.get("/api/usage-status")
+@app.get("/api/usage/status", include_in_schema=False)
+def usage_status(request: Request):
+    return build_usage_status(request)
 
 
 @app.post(

@@ -186,6 +186,78 @@ def test_public_api_expired_free_trial_still_returns_payment_required(
     assert data["error"]["code"] == "PAYMENT_REQUIRED"
 
 
+def test_usage_status_reports_expired_trial_without_bypass(monkeypatch, tmp_path):
+    """Usage status mirrors the billing gate without recording route usage."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv(main.DEV_USAGE_BYPASS_ENV, raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "usage-status-expired.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    response = client.get(
+        "/api/usage-status",
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_access"] is False
+    assert data["is_within_trial"] is False
+    assert data["is_paying"] is False
+    assert data["dev_bypass_active"] is False
+
+
+def test_usage_status_reports_full_access_when_dev_bypass_active(
+    monkeypatch,
+    tmp_path,
+):
+    """The local bypass makes usage status report full access for the frontend."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.delenv("RENDER", raising=False)
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "usage-status-bypass.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    response = client.get(
+        "/api/usage-status",
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_access"] is True
+    assert data["is_within_trial"] is True
+    assert data["is_paying"] is True
+    assert data["dev_bypass_active"] is True
+
+
+def test_usage_status_dev_bypass_is_ignored_on_render(monkeypatch, tmp_path):
+    """Render-like environments still report the real expired usage state."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setenv("RENDER", "true")
+    monkeypatch.delenv("RENDER_SERVICE_ID", raising=False)
+    monkeypatch.delenv("ENVIRONMENT", raising=False)
+    monkeypatch.setenv(main.DEV_USAGE_BYPASS_ENV, "true")
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "usage-status-render.db")
+    database.init_db(force=True)
+    expire_usage_identifier("expired-user")
+
+    response = client.get(
+        "/api/usage-status",
+        headers={"X-Forwarded-For": "expired-user"},
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_access"] is False
+    assert data["is_within_trial"] is False
+    assert data["is_paying"] is False
+    assert data["dev_bypass_active"] is False
+
+
 def test_public_api_dev_bypass_allows_local_route_validation(
     monkeypatch,
     tmp_path,

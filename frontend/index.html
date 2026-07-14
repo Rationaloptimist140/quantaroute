@@ -893,6 +893,7 @@
   <script>
     const API_URL = "https://quantaroute.onrender.com/quantum/route-optimise";
     const HISTORY_URL = new URL("/api/routes/recent", API_URL).toString();
+    const USAGE_STATUS_URL = "/api/usage-status";
 
     const form = document.querySelector("#routeForm");
     const driverName = document.querySelector("#driverName");
@@ -928,6 +929,7 @@
     const refreshHistory = document.querySelector("#refreshHistory");
 
     let csvAddresses = [];
+    let usageStatus = { has_access: true, dev_bypass_active: false };
 
     function parseCsvRows(text) {
       const rows = [];
@@ -1124,6 +1126,38 @@
       message.classList.remove("hidden");
     }
 
+    function showPaywallIfAccessDenied(upgradeUrl) {
+      if (usageStatus.dev_bypass_active) {
+        clearMessage();
+        submitButton.disabled = false;
+        return false;
+      }
+
+      if (usageStatus.has_access === false) {
+        showUpgradeMessage(upgradeUrl || usageStatus.upgrade_url || "/pricing");
+        submitButton.disabled = true;
+        return true;
+      }
+
+      return false;
+    }
+
+    function applyUsageStatus(status) {
+      usageStatus = status || { has_access: true, dev_bypass_active: false };
+
+      if (usageStatus.dev_bypass_active) {
+        clearMessage();
+        submitButton.disabled = false;
+        return;
+      }
+
+      if (showPaywallIfAccessDenied()) {
+        return;
+      }
+
+      submitButton.disabled = false;
+    }
+
     function clearMessage() {
       message.textContent = "";
       message.classList.add("hidden");
@@ -1288,6 +1322,18 @@
       }
     }
 
+    async function fetchUsageStatus() {
+      try {
+        const response = await fetch(USAGE_STATUS_URL, { cache: "no-store" });
+        if (!response.ok) {
+          return;
+        }
+        applyUsageStatus(await response.json());
+      } catch (error) {
+        // Keep the optimiser usable if the optional status check is unavailable.
+      }
+    }
+
     csvFile.addEventListener("change", async () => {
       clearMessage();
       const file = csvFile.files[0];
@@ -1313,6 +1359,12 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       clearMessage();
+
+      if (usageStatus.dev_bypass_active) {
+        submitButton.disabled = false;
+      } else if (showPaywallIfAccessDenied()) {
+        return;
+      }
 
       const stops = parseTextarea();
       if (stops.length < 2) {
@@ -1343,7 +1395,7 @@
 
         if (!response.ok) {
           if (response.status === 402) {
-            showUpgradeMessage(data.upgrade_url || "/pricing");
+            showPaywallIfAccessDenied(data.upgrade_url || "/pricing");
             return;
           }
           throw new Error(formatApiError(data));
@@ -1370,6 +1422,7 @@
     });
 
     refreshHistory.addEventListener("click", fetchHistory);
+    fetchUsageStatus();
     fetchHistory();
 
   </script>

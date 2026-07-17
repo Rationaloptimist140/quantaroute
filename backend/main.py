@@ -801,6 +801,11 @@ def health_deep():
         "api_keys_available": api_keys_available(),
         "usage_tracking_available": usage_tracking_available(),
         "admin_bypass_configured": bool(ADMIN_KEY or ADMIN_BYPASS_IPS),
+        "stripe_package_installed": stripe is not None,
+        "stripe_secret_key_set": bool(STRIPE_SECRET_KEY),
+        "stripe_price_id_set": bool(STRIPE_PRICE_ID_MONTHLY),
+        "stripe_webhook_secret_set": bool(STRIPE_WEBHOOK_SECRET),
+        "stripe_checkout_configured": stripe_checkout_configured(),
     }
 
 

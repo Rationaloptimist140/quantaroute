@@ -27,7 +27,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Core promise: road-based, fuel-saving route optimisation for drivers and small fleets. Qiskit remains an experimental/internal optimisation module, not the live route-selection promise.
 - API-first promise: agents can submit a start point, 2-20 delivery stops, optional end point, vehicle, and optimisation preference, then receive ordered stops, benchmark distances, estimated saving, a Google Maps URL, WhatsApp message, and warnings.
 - MCP promise: a runnable local stdio MCP server now exposes `optimise_delivery_route` and calls the same public FastAPI endpoint.
-- API-key foundation: `X-API-Key` is optional during public testing; valid keys are hashed at rest, usage-counted by month, can enforce optional monthly limits, and can tag API/MCP route history for future paid access and rate limits.
+- API-key foundation: `X-API-Key` is optional during public testing; valid keys are hashed at rest, usage-counted by month, can enforce optional monthly limits, and can tag API/MCP route history for future paid access and rate limits. This same monthly_limit mechanism now backs the new monthly subscription plan (see below).
 - The working app should keep the route form visible immediately on load. Marketing/explainer content belongs on `frontend/landing.html`.
 - Route output should always emphasise:
   - optimised delivery order
@@ -49,12 +49,35 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Pricing positioning from the pitch:
   - Proposed price: `£1.99 per optimised route`.
   - Proposed launch offer: free first month.
-  - No subscription lock-in and no per-driver fees.
+  - No subscription lock-in and no per-driver fees for the pay-per-route tier.
+  - New (2026-07-17): a monthly plan at `£1.99/month for up to 100 routes` for couriers who run routes most days and want predictable cost, offered alongside pay-per-route rather than replacing it.
   - Competitor framing: Routific, OptimoRoute, Zeo, and enRoute use monthly subscriptions and/or app-first workflows.
 - Current pricing implementation:
   - Free for the first month, with usage tracked by client IP address.
   - After 30 days, non-paying users receive HTTP `402` with an upgrade link.
-  - Payment collection is still a placeholder; Stripe checkout is marked as coming soon.
+  - Payment collection is still a placeholder; Stripe checkout for the monthly plan is in progress. Pay-per-route Stripe checkout is deliberately deferred.
+  - The monthly plan is currently provisioned manually as an API key with `monthly_limit=100` (see "Monthly Subscription Plan" below); self-serve Stripe checkout is the next step once Stripe keys are configured.
+
+## Admin / Owner Bypass (2026-07-17)
+
+The free-trial gate blocks any IP identifier 30 days after its first use, with no owner exception. The owner's own IP got permanently 402'd once its original test traffic aged past 30 days (site went live 2026-05-13). Added a durable override entirely via Render env vars, no code redeploy needed to add/rotate access:
+
+- `ADMIN_KEY`: shared secret. Visiting any URL once with `?admin_key=<value>` sets a signed, year-long `httponly` cookie (`qr_admin`) that bypasses the trial/paywall gate on all later requests from that browser. Also accepted as an `X-Admin-Key` header for scripts/API use.
+- `ADMIN_BYPASS_IPS`: optional comma-separated static IP allowlist, checked as a fallback.
+- Implemented in `backend/main.py`: `is_admin_request()` + an HTTP middleware that sets the cookie, checked first thing inside `enforce_usage_limit()` before the existing 30-day/`is_paying` logic runs. Applies uniformly to `/quantum/route-optimise`, `/quantum/upload-csv`, and the public `/api/optimise-route` (when no separate API key already grants access).
+- `scripts/mark_paying.py` is a one-time stopgap: flips a specific already-recorded identifier's `is_paying` flag directly in whichever DB backend is active, for when you need to unblock an IP right now without waiting on env vars to propagate.
+- `ADMIN_KEY` must be set in the Render service environment before this works in production; without it the bypass paths are inert (`is_admin_request` returns `False`) and behaviour is unchanged from before.
+
+## Monthly Subscription Plan (2026-07-17)
+
+Rather than build a second, parallel subscription system, the new "£1.99/month for up to 100 routes" plan reuses the existing `quantaroute_api_keys` table, which already had `monthly_limit` + `usage_count_current_month` — exactly the shape a 100-routes/month plan needs.
+
+- Added columns: `plan`, `stripe_customer_id`, `stripe_subscription_id` on `quantaroute_api_keys` (both SQLite and Postgres schema paths in `backend/database.py`), plus `get_api_key_by_stripe_subscription()` and `set_api_key_active()` helpers so a future Stripe webhook can activate/deactivate the linked key without a second source of truth.
+- `create_api_key()` now accepts optional `plan`, `stripe_customer_id`, `stripe_subscription_id` kwargs.
+- Today, before Stripe checkout is wired up, a monthly subscriber is provisioned manually: run `scripts/create_api_key.py --label "<customer>" --monthly-limit 100` (optionally pass `plan="monthly_100"` once the script is extended) and hand them the key.
+- `frontend/pricing.html` now has a third pricing card for the Monthly Plan; its CTA currently mails `hi@quantaroute.co.uk` rather than a live checkout, since Stripe keys/price object are not yet confirmed as available.
+- **Not yet built**: the actual Stripe Checkout Session endpoint and webhook handler (`checkout.session.completed`, `customer.subscription.updated`/`deleted`) that would provision/activate/deactivate the linked API key automatically. Needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a recurring £1.99/month Stripe Price ID before that can ship. `stripe` was added to `requirements.txt` in preparation.
+- Per-route (pay-as-you-go) Stripe checkout remains explicitly out of scope for now, per product decision on 2026-07-17.
 
 ## Pitch Claims To Validate
 
@@ -66,13 +89,15 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 
 ## Files Changed
 
-- `requirements.txt` - updated Python 3.14-compatible dependency pins and added `psycopg[binary]` for Postgres route-history persistence.
+- `requirements.txt` - updated Python 3.14-compatible dependency pins, added `psycopg[binary]` for Postgres route-history persistence, and added `stripe` in preparation for the monthly-plan checkout/webhook work.
 - `backend/services/requirements.txt` - kept service dependency pins aligned, including the Postgres driver.
 - `render.yaml` - configured Render to run from `backend` with `uvicorn main:app --host 0.0.0.0 --port $PORT`.
-- `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, and `/pricing`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
+- `backend/main.py` - serves the working app at `/` and `/index.html`, the marketing page at `/landing`, `/landing.html`, static assets at `/assets`, no-store frontend cache headers, route validation handling, CSV upload address extraction, contact/support email constants, road-network API description, optional start/depot request fields, route history, and free-trial enforcement.
 - `backend/main.py` - added `POST /api/optimise-route` for agent/public API usage, structured API success/error models, optional `X-API-Key` handling, monthly-limit responses, `GET /llms.txt`, improved OpenAPI schema examples, API validation error handling, duplicate-stop cleanup, 20-stop limit handling, route-history saving for API requests, usage-event recording, and a health-check build marker.
 - `backend/main.py` - public API, CSV upload, and web optimiser now return clear structured geocoding errors that identify the failed address and say: "Could not find this address. Try adding postcode, city, or full business address."
+- `backend/main.py` (2026-07-17) - added `ADMIN_KEY`/`ADMIN_BYPASS_IPS` admin bypass (query param, `X-Admin-Key` header, or signed cookie) checked first inside `enforce_usage_limit`; `/pricing` now correctly serves `frontend/pricing.html` instead of `frontend/landing.html`; `/health/deep` reports `admin_bypass_configured`.
 - `backend/database.py` - dual SQLite/Postgres route history storage, benchmark metric persistence, automatic table initialisation, API-key hashing/storage/monthly-limit helpers, structured usage-event helpers, save/list/export/lookup helpers, and IP-based usage tracking.
+- `backend/database.py` (2026-07-17) - added `plan`, `stripe_customer_id`, `stripe_subscription_id` columns on `quantaroute_api_keys`; added `get_api_key_by_stripe_subscription()`, `set_api_key_active()`, and `mark_identifier_as_paying()` helpers.
 - `backend/services/geocoder.py` - robust UK postcode geocoding using active postcodes, terminated postcodes, outward codes, Nominatim GB fallback, and Photon fallback for commercial/place-name addresses.
 - `backend/services/geocoder.py` - Nominatim requests now include the QuantaRoute contact email in the User-Agent so the hosted service is identifiable to public geocoding infrastructure.
 - `backend/services/route_builder.py` - clearer error when too few stops can be geocoded, filters failed/malformed geocodes before routing, live-safe route selection, route-quality benchmark reporting, optional start/depot Google Maps routing, return-to-start support, and cleaned addresses for API results, Google Maps links, and WhatsApp links.
@@ -92,14 +117,17 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `examples/` - added a Plymouth API request JSON, live PowerShell curl example, and Claude Desktop/Cursor/Codex-style MCP config.
 - `frontend/result.html` - Premium White result-page shell with fuel-saving and road-network messaging.
 - `frontend/pricing.html` - Premium White pricing page with fuel-saving, simplicity, and road-based routing messaging.
+- `frontend/pricing.html` (2026-07-17) - added a third "Monthly Plan" card (£1.99/month, up to 100 routes) alongside the Free trial and Pay As You Go cards; comparison table and beta note updated to mention both pricing paths.
 - `frontend/assets/quantaroute-logo.svg` - cyan atom + location pin logo.
 - `.gitignore` - ignores local temp/package/venv artifacts.
 - `mcp/server.ts` - runnable stdio MCP server using the official TypeScript MCP SDK, exposing `optimise_delivery_route`, calling the FastAPI public API instead of duplicating optimisation logic, tagging requests with `X-QuantaRoute-Source: mcp`, and optionally forwarding `QUANTAROUTE_API_KEY`.
 - `mcp/README.md` - documents optional `QUANTAROUTE_API_KEY` usage.
 - `scripts/create_api_key.py` - local/dev CLI helper that creates a raw API key once and stores only its SHA-256 hash.
 - `scripts/export_route_history.py` - local/admin CLI backup helper that exports route history from Postgres or SQLite to timestamped JSON and CSV files.
+- `scripts/mark_paying.py` (2026-07-17, new) - one-time stopgap CLI to mark a specific identifier (IP) as paying, bypassing the 30-day free trial for that identifier without waiting on env var propagation.
 - `mcp/package.json`, `mcp/package-lock.json`, `mcp/tsconfig.json`, `mcp/README.md`, `mcp/test-api-call.ts`, `mcp/test-mcp-call.ts` - package scripts, build config, MCP config examples, and direct/MCP call tests.
 - `README.md` - refreshed API-first documentation, endpoint example, agent-ready direction, pricing, and safety language.
+- `README.md` (2026-07-17) - added "Admin / Owner Bypass" section documenting `ADMIN_KEY`/`ADMIN_BYPASS_IPS`/`scripts/mark_paying.py`, and updated the Pricing section to mention the monthly plan.
 - `requirements-dev.txt` - Python dev/test dependencies.
 - `tests/` - pytest coverage for the public API success/error/docs paths, optional API-key success/error paths, start/end distance reporting, route sheets, SQLite fallback route-history persistence, route-history export, and hashed API-key storage.
 
@@ -119,6 +147,8 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - `GET /routes/history` returns the last 50 saved routes.
 - The `users` table tracks first use, route count, and paying status by IP address in whichever storage backend is active.
 - Backend blocks expired free-trial users with HTTP `402` and the frontend shows a friendly upgrade prompt.
+- **The 30-day free-trial block had no exception for the site owner** — any IP whose first use was more than 30 days ago got permanently 402'd. Fixed 2026-07-17 with the `ADMIN_KEY`/`ADMIN_BYPASS_IPS` admin bypass in `backend/main.py`.
+- **`/pricing` was silently serving `frontend/landing.html` instead of `frontend/pricing.html`**, so the dedicated pricing page (and its new Monthly Plan card) was never actually reachable at `/pricing`. Fixed 2026-07-17 in `backend/main.py`.
 - CSV row numbers, surrounding quote marks, and trailing commas are stripped from displayed stops, API `ordered_addresses`, Google Maps directions links, and WhatsApp share links.
 - Multi-column CSV uploads now extract business name + address columns and ignore stop numbers, postcode-only fields, and order details so stop names display cleanly.
 - Google Maps directions can start from a cleaned start/depot address and optionally append that same start address at the end for round trips. The start address is not displayed as a numbered delivery stop.
@@ -133,7 +163,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Successful public API calls record structured rows in `quantaroute_usage_events` with route ID, API key ID when present, source, endpoint, status, stops count, distance saved, and estimated saving percentage.
 - Public no-key API testing still works while payments and paid API access are being prepared.
 - MCP requests can optionally use `QUANTAROUTE_API_KEY` and are tagged as MCP/API-client traffic.
-- Public API has non-blocking future TODOs for `X-API-Key`, rate limiting, and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
+- Public API has non-blocking future TODOs for rate limiting and per-route billing, plus basic abuse protection for very long addresses and duplicate-only/empty stop lists.
 - `/openapi.json` includes the agent route endpoint and request/response schemas.
 - `/llms.txt` explains QuantaRoute for AI agents and LLMs.
 - `/developers.html` is served as a public developer page and linked from the landing page.
@@ -155,15 +185,17 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
 - Route sheets use persistent Postgres route IDs when `DATABASE_URL` is configured.
 - PDF export is not implemented; users can print the HTML route sheet or use browser print-to-PDF.
 - If `DATABASE_URL` is missing in production, route history falls back to SQLite on the local/Render filesystem. Render free-tier filesystems are ephemeral, so old route sheet URLs can reset without Postgres.
-- Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs.
+- Usage tracking currently uses IP address only; this is simple but not robust for shared networks, VPNs, or users with changing IPs. `ADMIN_KEY` sidesteps this for the owner specifically; it does not fix it for regular users.
 - API-key monthly limits are enforced when `monthly_limit` is set. A null monthly limit is treated as unlimited.
 - Unauthenticated public API traffic is still allowed and not fully rate-limited yet.
-- API keys are not mapped to Stripe customers yet.
-- Stripe/payment collection is not implemented yet; the pricing section currently says payment is coming soon.
+- API keys are not mapped to Stripe customers/subscriptions in an automated way yet — `stripe_customer_id`/`stripe_subscription_id` columns exist but nothing writes to them until the checkout/webhook endpoints are built.
+- Stripe/payment collection is not implemented yet; the pricing page currently sends Monthly Plan signups to email instead of live checkout, and pay-per-route checkout is explicitly deferred.
+- Self-serve Stripe Checkout for the monthly plan needs `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, and a recurring £1.99/month Price ID before it can ship — not yet confirmed as available.
 - The "up to 49%" marketing claim needs supporting data or should be adjusted to match proven results.
 - Render free tier can cold start, so first request may be slow.
 - The Render API key previously appeared in a screenshot and should be revoked/regenerated.
 - Route-history backups are manual for now; run `scripts/export_route_history.py` before changing storage or before a free Render Postgres instance expires.
+- `ADMIN_KEY` must be set in the Render environment for the admin bypass to do anything; until then `is_admin_request()` always returns `False` and behaviour is unchanged.
 
 ## Deployment Steps
 
@@ -181,6 +213,7 @@ Source pitch file reviewed: `C:\Users\rw718\Desktop\QuantaRoute-USP-Pitch.pdf`
    - Start command: `uvicorn main:app --host 0.0.0.0 --port $PORT`
    - Health check: `/health`
    - Production persistence: create a Render Postgres database and set the web service environment variable `DATABASE_URL` to its internal database URL.
+   - New env vars (2026-07-17): `ADMIN_KEY` (required for the owner bypass to work), `ADMIN_BYPASS_IPS` (optional). Stripe env vars (`STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_ID_MONTHLY`) once the checkout/webhook endpoints are built.
 
 4. Render usually auto-deploys on push. If it lags, trigger a manual deploy from the Render dashboard or API.
 
@@ -301,6 +334,24 @@ Invoke-RestMethod -Method Post `
   -ContentType "application/json" `
   -Headers $headers `
   -Body $body
+```
+
+Unblock yourself as owner right now (durable fix, requires deploy + env var):
+
+```text
+1. In Render, set ADMIN_KEY to a long random secret on the quantaroute web service.
+2. Redeploy.
+3. Visit https://quantaroute.co.uk/?admin_key=<the ADMIN_KEY value> once from your browser.
+4. Your browser now bypasses the free-trial/paywall gate for a year via a signed cookie.
+```
+
+Unblock yourself as owner right now (immediate stopgap, no deploy needed if already deployed):
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+$env:DATABASE_URL="postgresql://user:password@host:5432/database"
+python scripts\mark_paying.py --identifier <your current public IP>
+$env:DATABASE_URL=$null
 ```
 
 MCP install/build/run:

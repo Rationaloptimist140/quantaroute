@@ -33,7 +33,7 @@
     }
 
     .page {
-      max-width: 960px;
+      max-width: 1080px;
       margin: 0 auto;
       padding: 32px 16px;
     }
@@ -102,6 +102,21 @@
       border: 2px solid var(--accent);
     }
 
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: var(--highlight);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      width: fit-content;
+    }
+
     .price {
       color: var(--success);
       font-size: clamp(2rem, 4vw, 3rem);
@@ -155,6 +170,16 @@
 
     .button:hover {
       background: var(--accent-hover);
+    }
+
+    .button.secondary {
+      background: #FFFFFF;
+      color: var(--accent);
+      border: 1px solid var(--accent);
+    }
+
+    .button.secondary:hover {
+      background: var(--highlight);
     }
 
     .comparison-card {
@@ -222,7 +247,7 @@
 
     @media (min-width: 780px) {
       .pricing-grid {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: repeat(3, 1fr);
       }
 
       .pricing-card.featured {
@@ -257,7 +282,7 @@
 
       <article class="pricing-card">
         <div>
-          <h2>After Trial</h2>
+          <h2>Pay As You Go</h2>
           <p class="muted">A simple price for active delivery days, with no monthly software commitment.</p>
         </div>
         <div class="price">£1.99 <small>/ optimised route</small></div>
@@ -268,6 +293,22 @@
           <li>Cancel anytime</li>
         </ul>
         <a class="button" href="/">Optimise a Route</a>
+      </article>
+
+      <article class="pricing-card">
+        <div>
+          <span class="badge">New</span>
+          <h2>Monthly Plan</h2>
+          <p class="muted">For regular couriers who run routes most days and want a predictable monthly cost.</p>
+        </div>
+        <div class="price">£1.99 <small>/ month, up to 100 routes</small></div>
+        <ul class="feature-list">
+          <li>Up to 100 optimised routes per month</li>
+          <li>Works today as an API key on request &mdash; self-serve Stripe checkout coming soon</li>
+          <li>Everything in Pay As You Go</li>
+          <li>Cancel anytime</li>
+        </ul>
+        <a class="button secondary" href="mailto:hi@quantaroute.co.uk?subject=QuantaRoute%20Monthly%20Plan">Get the Monthly Plan</a>
       </article>
     </section>
 
@@ -288,7 +329,7 @@
           <tbody>
             <tr>
               <td>Price</td>
-              <td class="q-col">£1.99/route</td>
+              <td class="q-col">£1.99/route or £1.99/mo (100 routes)</td>
               <td>£150+/month</td>
               <td>£39+/driver/month</td>
             </tr>
@@ -320,7 +361,7 @@
         </table>
       </div>
 
-      <p class="note">Currently in beta: QuantaRoute is free to test during the beta period. Stripe checkout is being added soon. After launch, pricing will be £1.99 per optimised route.</p>
+      <p class="note">Currently in beta: QuantaRoute is free to test during the beta period. Stripe checkout for the monthly plan is being added; email hi@quantaroute.co.uk to get set up on it now. After launch, pricing will be £1.99 per optimised route, or £1.99/month for up to 100 routes.</p>
     </section>
   </main>
 </body>

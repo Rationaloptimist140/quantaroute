@@ -115,6 +115,15 @@ POSTGRES_ROUTE_COLUMNS = [
 ]
 
 
+# NOTE on the subscription plan (£1.99/month for up to 100 routes):
+# Rather than build a parallel subscription table, the existing
+# quantaroute_api_keys table already has exactly the right shape
+# (monthly_limit + usage_count_current_month). A Stripe-backed monthly
+# subscription is modelled as an API key with monthly_limit=100 whose
+# is_active flag tracks the linked Stripe subscription status. The columns
+# below link a key back to its Stripe customer/subscription/plan so the
+# webhook handler (to be added once Stripe keys are available) can activate
+# or deactivate it without a second source of truth.
 API_KEY_SELECT_COLUMNS = """
     id,
     key_hash,
@@ -126,19 +135,28 @@ API_KEY_SELECT_COLUMNS = """
     monthly_limit,
     usage_count_current_month,
     month_key,
-    notes
+    notes,
+    plan,
+    stripe_customer_id,
+    stripe_subscription_id
 """
 
 
 SQLITE_API_KEY_COLUMNS = [
     ("month_key", "TEXT"),
     ("notes", "TEXT"),
+    ("plan", "TEXT"),
+    ("stripe_customer_id", "TEXT"),
+    ("stripe_subscription_id", "TEXT"),
 ]
 
 
 POSTGRES_API_KEY_COLUMNS = [
     ("month_key", "TEXT"),
     ("notes", "TEXT"),
+    ("plan", "TEXT"),
+    ("stripe_customer_id", "TEXT"),
+    ("stripe_subscription_id", "TEXT"),
 ]
 
 
@@ -406,6 +424,9 @@ def create_api_key(
     monthly_limit: int | None = None,
     source_label: str | None = None,
     notes: str | None = None,
+    plan: str | None = None,
+    stripe_customer_id: str | None = None,
+    stripe_subscription_id: str | None = None,
 ) -> dict[str, Any]:
     init_db()
     raw_key = generate_api_key()
@@ -425,12 +446,26 @@ def create_api_key(
                     source_label,
                     monthly_limit,
                     month_key,
-                    notes
+                    notes,
+                    plan,
+                    stripe_customer_id,
+                    stripe_subscription_id
                 )
-                VALUES (%s, %s, %s, %s, %s, %s)
-                RETURNING id, label, source_label, monthly_limit, month_key, notes, created_at
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, label, source_label, monthly_limit, month_key, notes, plan,
+                          stripe_customer_id, stripe_subscription_id, created_at
                 """,
-                (key_hash, clean_label, clean_source, monthly_limit, month_key, clean_notes),
+                (
+                    key_hash,
+                    clean_label,
+                    clean_source,
+                    monthly_limit,
+                    month_key,
+                    clean_notes,
+                    plan,
+                    stripe_customer_id,
+                    stripe_subscription_id,
+                ),
             ).fetchone()
     else:
         with get_sqlite_connection() as conn:
@@ -442,16 +477,30 @@ def create_api_key(
                     source_label,
                     monthly_limit,
                     month_key,
-                    notes
+                    notes,
+                    plan,
+                    stripe_customer_id,
+                    stripe_subscription_id
                 )
-                VALUES (?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (key_hash, clean_label, clean_source, monthly_limit, month_key, clean_notes),
+                (
+                    key_hash,
+                    clean_label,
+                    clean_source,
+                    monthly_limit,
+                    month_key,
+                    clean_notes,
+                    plan,
+                    stripe_customer_id,
+                    stripe_subscription_id,
+                ),
             )
             conn.commit()
             row = conn.execute(
                 """
-                SELECT id, label, source_label, monthly_limit, month_key, notes, created_at
+                SELECT id, label, source_label, monthly_limit, month_key, notes, plan,
+                       stripe_customer_id, stripe_subscription_id, created_at
                 FROM quantaroute_api_keys
                 WHERE id = ?
                 """,
@@ -486,6 +535,53 @@ def get_api_key_by_hash(key_hash: str) -> dict[str, Any] | None:
                 (key_hash,),
             ).fetchone()
     return dict(row) if row is not None else None
+
+
+def get_api_key_by_stripe_subscription(stripe_subscription_id: str) -> dict[str, Any] | None:
+    """Look up the API key linked to a Stripe subscription, so the webhook
+    handler can activate/deactivate it as the subscription's status changes."""
+    init_db()
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM quantaroute_api_keys
+                WHERE stripe_subscription_id = %s
+                """,
+                (stripe_subscription_id,),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM quantaroute_api_keys
+                WHERE stripe_subscription_id = ?
+                """,
+                (stripe_subscription_id,),
+            ).fetchone()
+    return dict(row) if row is not None else None
+
+
+def set_api_key_active(key_id: int, is_active: bool) -> None:
+    """Activate or deactivate an API key, used when a linked Stripe
+    subscription is created/renewed (activate) or cancelled/payment fails
+    (deactivate)."""
+    init_db()
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            conn.execute(
+                "UPDATE quantaroute_api_keys SET is_active = %s WHERE id = %s",
+                (is_active, key_id),
+            )
+    else:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                "UPDATE quantaroute_api_keys SET is_active = ? WHERE id = ?",
+                (1 if is_active else 0, key_id),
+            )
+            conn.commit()
 
 
 def should_reset_monthly_usage(last_used_at: Any, now: datetime) -> bool:
@@ -538,7 +634,6 @@ def validate_and_record_api_key(
     usage_count = current_count + 1
     now_value = now.isoformat()
 
-    # TODO: Map API keys to Stripe customers/subscriptions before billing launch.
     if using_postgres():
         with get_postgres_connection() as conn:
             row = conn.execute(
@@ -1004,6 +1099,29 @@ def parse_timestamp(value: Any) -> datetime:
 def is_within_free_month(first_used: Any) -> bool:
     trial_start_cutoff = datetime.now(UTC) - timedelta(days=30)
     return parse_timestamp(first_used) >= trial_start_cutoff
+
+
+def mark_identifier_as_paying(identifier: str) -> dict[str, Any]:
+    """Manually mark a specific identifier (usually an IP address) as a
+    paying user, bypassing the 30-day free-trial check going forward. Used as
+    an immediate stopgap; the ADMIN_KEY/ADMIN_BYPASS_IPS mechanism in
+    backend/main.py is the durable fix so this shouldn't be needed again."""
+    init_db()
+    get_or_create_user(identifier)
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            conn.execute(
+                f"UPDATE {USAGE_EVENTS_TABLE} SET is_paying = 1 WHERE identifier = %s",
+                (identifier,),
+            )
+    else:
+        with get_sqlite_connection() as conn:
+            conn.execute(
+                f"UPDATE {USAGE_EVENTS_TABLE} SET is_paying = 1 WHERE identifier = ?",
+                (identifier,),
+            )
+            conn.commit()
+    return get_or_create_user(identifier)
 
 
 def record_allowed_route_use(identifier: str) -> tuple[bool, dict[str, Any]]:

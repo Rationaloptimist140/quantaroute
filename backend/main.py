@@ -7,6 +7,8 @@ import os
 import csv
 import io
 import re
+import secrets as secrets_lib
+import hashlib
 from pathlib import Path
 from typing import Literal
 
@@ -37,7 +39,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "health-storage-backend-2026-06-11"
+APP_BUILD = "admin-bypass-subscription-2026-07-17"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -86,8 +88,88 @@ except Exception:
 UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
 
+# --- Admin / owner bypass -----------------------------------------------
+#
+# The free-trial gate below (enforce_usage_limit) blocks any identifier (IP
+# address) 30 days after its first use, with no built-in exception for the
+# site owner. That meant the owner's own IP got permanently 402'd once their
+# original test traffic aged past 30 days. This section adds a durable,
+# env-configured bypass so that doesn't happen again:
+#
+#   ADMIN_KEY           - a shared secret. Visiting ANY URL once with
+#                          ?admin_key=<ADMIN_KEY> sets a long-lived signed
+#                          cookie that bypasses the trial/paywall gate on all
+#                          later requests from that browser. The same value
+#                          can also be sent as an X-Admin-Key header (useful
+#                          for scripts/Postman/curl instead of a browser).
+#   ADMIN_BYPASS_IPS     - optional comma-separated list of IP addresses that
+#                          always bypass the gate, no key needed. Useful as a
+#                          belt-and-braces fallback for a known static office
+#                          IP, but IPs change, so ADMIN_KEY is the primary
+#                          mechanism.
+#
+# Neither of these affects paying customers or the free-trial logic for
+# normal visitors; they only add an override path for the owner.
+ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()
+ADMIN_COOKIE_NAME = "qr_admin"
+ADMIN_BYPASS_IPS = {
+    ip.strip()
+    for ip in os.getenv("ADMIN_BYPASS_IPS", "").split(",")
+    if ip.strip()
+}
+
+
+def _admin_cookie_value() -> str:
+    if not ADMIN_KEY:
+        return ""
+    return hashlib.sha256(f"quantaroute-admin:{ADMIN_KEY}".encode("utf-8")).hexdigest()
+
+
+ADMIN_COOKIE_VALUE = _admin_cookie_value()
+
+
+def is_admin_request(request: Request) -> bool:
+    if not ADMIN_KEY and not ADMIN_BYPASS_IPS:
+        return False
+
+    if ADMIN_KEY:
+        header_key = request.headers.get("x-admin-key", "")
+        if header_key and secrets_lib.compare_digest(header_key, ADMIN_KEY):
+            return True
+
+        query_key = request.query_params.get("admin_key", "")
+        if query_key and secrets_lib.compare_digest(query_key, ADMIN_KEY):
+            return True
+
+        cookie_value = request.cookies.get(ADMIN_COOKIE_NAME, "")
+        if cookie_value and secrets_lib.compare_digest(cookie_value, ADMIN_COOKIE_VALUE):
+            return True
+
+    if ADMIN_BYPASS_IPS and get_client_identifier(request) in ADMIN_BYPASS_IPS:
+        return True
+
+    return False
+
+
+@app.middleware("http")
+async def admin_bypass_cookie_middleware(request: Request, call_next):
+    """If a valid admin_key query param is present, set a long-lived cookie
+    so the browser keeps bypassing the trial/paywall gate on later requests
+    without needing the query param every time."""
+    response = await call_next(request)
+    if ADMIN_KEY:
+        query_key = request.query_params.get("admin_key", "")
+        if query_key and secrets_lib.compare_digest(query_key, ADMIN_KEY):
+            response.set_cookie(
+                ADMIN_COOKIE_NAME,
+                ADMIN_COOKIE_VALUE,
+                max_age=60 * 60 * 24 * 365,
+                httponly=True,
+                samesite="lax",
+            )
+    return response
+
 # TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
-# TODO: Add future per-route billing once Stripe checkout is active.
 # TODO: Add future unauthenticated public traffic throttling before wider launch.
 
 
@@ -171,6 +253,10 @@ def get_client_identifier(request: Request) -> str:
 
 
 def enforce_usage_limit(request: Request) -> JSONResponse | None:
+    if is_admin_request(request):
+        logger.info("Admin bypass granted for %s", get_client_identifier(request))
+        return None
+
     identifier = get_client_identifier(request)
     allowed, user = record_allowed_route_use(identifier)
     if allowed:
@@ -184,7 +270,7 @@ def enforce_usage_limit(request: Request) -> JSONResponse | None:
     return JSONResponse(
         status_code=402,
         content={
-            "detail": "Free trial ended. Please upgrade to continue at £1.99 per route.",
+            "detail": "Free trial ended. Please upgrade to continue at £1.99 per route, or subscribe to the monthly plan.",
             "upgrade_url": UPGRADE_URL,
         },
     )
@@ -619,7 +705,7 @@ API keys are optional while QuantaRoute is free to test. Send X-API-Key when a k
 
 ## Pricing
 
-First month free for testing. Then £1.99 per optimised route. Payments may still be in testing.
+First month free for testing. Then £1.99 per optimised route, or a monthly plan at £1.99/month for up to 100 routes. Payments may still be in testing.
 
 ## Safety
 
@@ -660,6 +746,7 @@ def health_deep():
         "route_history_available": route_history_available,
         "api_keys_available": api_keys_available(),
         "usage_tracking_available": usage_tracking_available(),
+        "admin_bypass_configured": bool(ADMIN_KEY or ADMIN_BYPASS_IPS),
     }
 
 
@@ -696,7 +783,7 @@ def developers_page():
 
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
-    return frontend_file("landing.html")
+    return frontend_file("pricing.html")
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(
@@ -876,7 +963,7 @@ async def api_optimise_route(
         return public_api_error(
             402,
             "PAYMENT_REQUIRED",
-            "Free trial ended. Please upgrade to continue at £1.99 per route.",
+            "Free trial ended. Please upgrade to continue at £1.99 per route, or subscribe to the monthly plan.",
             [UPGRADE_URL],
         )
 

@@ -8,6 +8,7 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 
 - App: https://quantaroute.co.uk
 - Landing page: https://quantaroute.co.uk/landing.html
+- Pricing: https://quantaroute.co.uk/pricing
 - API docs: https://quantaroute.co.uk/openapi.json
 - LLM guide: https://quantaroute.co.uk/llms.txt
 
@@ -131,6 +132,33 @@ The raw key is shown once by the creation script. QuantaRoute stores only a
 SHA-256 hash, plus safe metadata such as label, monthly limit, current month
 usage count, and notes.
 
+## Admin / Owner Bypass
+
+The free-trial gate blocks any visitor identifier (IP address) 30 days after
+its first use — including the site owner's own IP if it was used for early
+testing. There is now a durable override, configured entirely via Render
+environment variables (no code changes or manual DB edits needed after the
+first setup):
+
+- `ADMIN_KEY` — a shared secret. Visit any URL once with `?admin_key=<value>`
+  (for example `https://quantaroute.co.uk/?admin_key=your-secret`) and the
+  browser receives a signed, `httponly` cookie valid for a year that bypasses
+  the free-trial/paywall gate on every later request from that browser. The
+  same value can be sent as an `X-Admin-Key` header instead, for
+  scripts/curl/Postman rather than a browser.
+- `ADMIN_BYPASS_IPS` — optional comma-separated list of IP addresses that
+  always bypass the gate with no key needed. Useful as a fallback for a known
+  static office IP, but `ADMIN_KEY` is the primary mechanism since consumer
+  IPs change.
+
+Set `ADMIN_KEY` in the Render service environment to a long random value and
+keep it private — anyone with the value gets unlimited free routes.
+
+If you need to unblock a specific already-recorded identifier right now
+without waiting for a deploy, `scripts/mark_paying.py` flips that identifier's
+`is_paying` flag directly (see script docstring for usage). This is a
+one-time stopgap; `ADMIN_KEY`/`ADMIN_BYPASS_IPS` is the lasting fix.
+
 ## Agent-Ready Direction
 
 QuantaRoute is being developed as an API and MCP-compatible tool for AI assistants and business agents.
@@ -208,7 +236,7 @@ Safety notes:
 - Distance and fuel savings are estimates.
 - QuantaRoute does not guarantee the mathematically shortest route in all cases.
 - Drivers must follow road laws, live traffic conditions, vehicle restrictions, and professional judgement.
-- Stripe checkout is not active yet; public testing remains free while payments are prepared.
+- Stripe checkout for the monthly plan is being wired up; pay-per-route checkout is not yet automated either. Public testing remains free while payments are prepared.
 - API keys are optional during public testing and will become part of paid/API access later.
 
 Local API test:
@@ -273,7 +301,10 @@ MCP config example:
 
 ## Pricing
 
-First month free for testing. Then £1.99 per optimised route. No subscription, no monthly fee, and payments are currently being prepared.
+First month free for testing. Then £1.99 per optimised route, or a monthly
+plan at £1.99/month for up to 100 routes for regular couriers. No forced
+subscription on the pay-per-route tier; payments are currently being
+prepared/wired up for both. See `/pricing` for the current pricing page.
 
 ## Safety
 
@@ -285,6 +316,7 @@ QuantaRoute provides estimated route optimisation and fuel-saving calculations. 
 - Production storage: Postgres via `DATABASE_URL`, SQLite fallback locally
 - Frontend: HTML/CSS/JavaScript
 - Routing data: public geocoding and OSRM road-network distances
+- Payments: Stripe (monthly plan integration in progress)
 - Deployment: Render
 
 ## Development

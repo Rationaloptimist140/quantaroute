@@ -12,6 +12,11 @@ import hashlib
 from pathlib import Path
 from typing import Literal
 
+try:
+    import stripe
+except ImportError:  # pragma: no cover - only needed once STRIPE_SECRET_KEY is set.
+    stripe = None
+
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
@@ -19,7 +24,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import logging
@@ -67,6 +72,9 @@ if ASSETS_DIR.exists():
 
 from database import (
     api_keys_available,
+    create_api_key,
+    get_api_key_by_stripe_customer_id,
+    get_api_key_by_stripe_subscription,
     get_database_url,
     get_recent_routes,
     get_route_by_id,
@@ -74,6 +82,7 @@ from database import (
     record_allowed_route_use,
     record_usage_event,
     save_route,
+    set_api_key_active,
     usage_tracking_available,
     using_postgres,
     validate_and_record_api_key,
@@ -171,6 +180,51 @@ async def admin_bypass_cookie_middleware(request: Request, call_next):
 
 # TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
 # TODO: Add future unauthenticated public traffic throttling before wider launch.
+
+# --- Stripe monthly plan (£1.99/month for up to 100 routes) -------------
+#
+# The monthly plan is modelled as an API key with monthly_limit=100 whose
+# is_active flag tracks the linked Stripe subscription (see
+# backend/database.py for the plan/stripe_customer_id/stripe_subscription_id
+# columns). Flow:
+#
+#   1. GET /subscribe/monthly creates a Stripe Checkout Session for the
+#      recurring price and redirects the browser to Stripe's hosted page.
+#   2. On success, Stripe redirects back to /subscribe/success?session_id=...
+#      which looks the API key up by the Checkout Session's customer id and
+#      shows the raw key once (Stripe's session_id is the proof of purchase).
+#   3. The webhook at POST /api/stripe/webhook is the source of truth: it
+#      creates the API key on checkout.session.completed, and flips
+#      is_active on customer.subscription.updated/deleted so a cancelled or
+#      failed-payment subscription stops granting free routes.
+#
+# All three env vars below must be set before this does anything; if they
+# are missing the subscribe endpoints return a clear 503 instead of crashing,
+# and the rest of the site (free trial, pay-per-route, admin bypass) is
+# unaffected either way.
+STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
+STRIPE_PRICE_ID_MONTHLY = os.getenv("STRIPE_PRICE_ID_MONTHLY", "").strip()
+STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
+MONTHLY_PLAN_ROUTE_LIMIT = 100
+
+if stripe is not None and STRIPE_SECRET_KEY:
+    stripe.api_key = STRIPE_SECRET_KEY
+
+
+def stripe_checkout_configured() -> bool:
+    return bool(stripe is not None and STRIPE_SECRET_KEY and STRIPE_PRICE_ID_MONTHLY)
+
+
+def stripe_not_configured_response() -> JSONResponse:
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": (
+                "The monthly plan isn't set up yet. Email hi@quantaroute.co.uk "
+                "to get started, or check back shortly."
+            ),
+        },
+    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -784,6 +838,170 @@ def developers_page():
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
     return frontend_file("pricing.html")
+
+
+@app.get("/subscribe/monthly", include_in_schema=False)
+def subscribe_monthly(request: Request):
+    """Start Stripe Checkout for the £1.99/month, up to 100 routes plan."""
+    if not stripe_checkout_configured():
+        return stripe_not_configured_response()
+
+    base_url = str(request.base_url).rstrip("/")
+    try:
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": STRIPE_PRICE_ID_MONTHLY, "quantity": 1}],
+            success_url=f"{base_url}/subscribe/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{base_url}/pricing",
+            billing_address_collection="auto",
+        )
+    except Exception as e:  # noqa: BLE001 - surface a clean message either way
+        logger.error(f"Stripe checkout session creation failed: {e}")
+        return JSONResponse(
+            status_code=502,
+            content={"detail": "Could not start checkout. Please try again shortly."},
+        )
+
+    return RedirectResponse(session.url, status_code=303)
+
+
+@app.get("/subscribe/success", response_class=HTMLResponse, include_in_schema=False)
+def subscribe_success(session_id: str = ""):
+    """Show the provisioned API key once, looked up via the Checkout Session
+    id Stripe redirected back with. The webhook (not this page) is the
+    source of truth for actually creating/activating the key - this page
+    just displays it if the webhook has already run."""
+    if not stripe_checkout_configured() or not session_id:
+        return HTMLResponse(
+            "<p>Missing or invalid checkout session. If you were charged, "
+            "email hi@quantaroute.co.uk and we'll sort out your API key.</p>",
+            status_code=400,
+        )
+
+    try:
+        session = stripe.checkout.Session.retrieve(session_id)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Could not retrieve Stripe checkout session {session_id}: {e}")
+        return HTMLResponse(
+            "<p>Could not verify your checkout session. Email "
+            "hi@quantaroute.co.uk with your receipt and we'll sort out your "
+            "API key.</p>",
+            status_code=502,
+        )
+
+    customer_id = session.get("customer") if isinstance(session, dict) else getattr(session, "customer", None)
+    record = get_api_key_by_stripe_customer_id(customer_id) if customer_id else None
+
+    if record is None:
+        # The webhook usually beats the browser redirect, but if it hasn't
+        # landed yet, tell the customer their key is on the way rather than
+        # showing an error.
+        return HTMLResponse(
+            "<p>Thanks! Your subscription is being set up. Refresh this page "
+            "in a few seconds, or email hi@quantaroute.co.uk if your API key "
+            "doesn't appear shortly.</p>"
+        )
+
+    # Raw API keys are never stored in our database (only a SHA-256 hash) -
+    # the webhook stashes the raw key in Stripe Customer metadata for this
+    # one-time pickup, and we clear it immediately after showing it so it
+    # isn't sitting anywhere retrievable a second time.
+    raw_key = None
+    try:
+        customer = stripe.Customer.retrieve(customer_id)
+        raw_key = (customer.get("metadata") or {}).get("quantaroute_api_key")
+        if raw_key:
+            stripe.Customer.modify(customer_id, metadata={"quantaroute_api_key": ""})
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Could not read/clear API key metadata for customer {customer_id}: {e}")
+
+    if not raw_key:
+        return HTMLResponse(
+            "<h1>You're subscribed</h1>"
+            "<p>Up to 100 optimised routes per month. Your API key has "
+            "already been issued - if you didn't save it, email "
+            "hi@quantaroute.co.uk with your receipt and we'll reissue one.</p>"
+        )
+
+    return HTMLResponse(
+        "<h1>You're subscribed</h1>"
+        "<p>Up to 100 optimised routes per month. Save this API key now - it "
+        "will not be shown again:</p>"
+        f"<pre style='padding:16px;background:#f0fdf4;border-radius:8px;font-size:16px;'>{raw_key}</pre>"
+        "<p>Send it as the <code>X-API-Key</code> header on "
+        "<code>POST /api/optimise-route</code>. Questions: hi@quantaroute.co.uk</p>"
+    )
+
+
+@app.post("/api/stripe/webhook", include_in_schema=False)
+async def stripe_webhook(request: Request):
+    if stripe is None or not STRIPE_WEBHOOK_SECRET:
+        # Not configured yet; acknowledge so Stripe doesn't retry forever,
+        # but do nothing.
+        return JSONResponse(status_code=200, content={"received": False})
+
+    payload = await request.body()
+    signature = request.headers.get("stripe-signature", "")
+
+    try:
+        event = stripe.Webhook.construct_event(payload, signature, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:  # noqa: BLE001 - invalid signature or payload
+        logger.warning(f"Stripe webhook signature verification failed: {e}")
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    event_type = event.get("type", "")
+    data_object = event.get("data", {}).get("object", {})
+
+    if event_type == "checkout.session.completed":
+        customer_id = data_object.get("customer")
+        subscription_id = data_object.get("subscription")
+        customer_email = (data_object.get("customer_details") or {}).get("email") or "Monthly Plan Customer"
+        if customer_id and subscription_id and get_api_key_by_stripe_customer_id(customer_id) is None:
+            record = create_api_key(
+                customer_email,
+                monthly_limit=MONTHLY_PLAN_ROUTE_LIMIT,
+                source_label="monthly_plan",
+                notes="Auto-provisioned by Stripe checkout.session.completed",
+                plan="monthly_100",
+                stripe_customer_id=customer_id,
+                stripe_subscription_id=subscription_id,
+            )
+            logger.info(
+                "Provisioned monthly-plan API key id=%s for stripe_customer=%s",
+                record.get("id"),
+                customer_id,
+            )
+            # Stash the raw key in Stripe Customer metadata for exactly one
+            # pickup by /subscribe/success - we never persist it ourselves
+            # (only its SHA-256 hash), and the success page clears this
+            # field the moment it's displayed.
+            try:
+                stripe.Customer.modify(
+                    customer_id,
+                    metadata={"quantaroute_api_key": record["api_key"]},
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.error(
+                    f"Could not stash API key in Stripe customer metadata for {customer_id}: {e}"
+                )
+
+    elif event_type in {"customer.subscription.updated", "customer.subscription.deleted"}:
+        subscription_id = data_object.get("id")
+        status = data_object.get("status", "")
+        record = get_api_key_by_stripe_subscription(subscription_id) if subscription_id else None
+        if record is not None:
+            should_be_active = event_type == "customer.subscription.updated" and status in {"active", "trialing"}
+            set_api_key_active(record["id"], should_be_active)
+            logger.info(
+                "Set api_key id=%s active=%s from subscription %s status=%s",
+                record["id"],
+                should_be_active,
+                subscription_id,
+                status,
+            )
+
+    return JSONResponse(status_code=200, content={"received": True})
+
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(

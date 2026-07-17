@@ -564,6 +564,37 @@ def get_api_key_by_stripe_subscription(stripe_subscription_id: str) -> dict[str,
     return dict(row) if row is not None else None
 
 
+def get_api_key_by_stripe_customer_id(stripe_customer_id: str) -> dict[str, Any] | None:
+    """Look up the API key linked to a Stripe customer, used by the
+    /subscribe/success page to show the provisioned key once."""
+    init_db()
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM quantaroute_api_keys
+                WHERE stripe_customer_id = %s
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (stripe_customer_id,),
+            ).fetchone()
+    else:
+        with get_sqlite_connection() as conn:
+            row = conn.execute(
+                f"""
+                SELECT {API_KEY_SELECT_COLUMNS}
+                FROM quantaroute_api_keys
+                WHERE stripe_customer_id = ?
+                ORDER BY id DESC
+                LIMIT 1
+                """,
+                (stripe_customer_id,),
+            ).fetchone()
+    return dict(row) if row is not None else None
+
+
 def set_api_key_active(key_id: int, is_active: bool) -> None:
     """Activate or deactivate an API key, used when a linked Stripe
     subscription is created/renewed (activate) or cancelled/payment fails

@@ -1342,10 +1342,17 @@
         }
 
         if (!response.ok) {
-          if (response.status === 402) {
-            showUpgradeMessage(data.upgrade_url || "/pricing");
-            return;
-          }
+          // FREE MODE: 402 upgrade prompts are suppressed while the app
+          // is free to use. The backend already bypasses the paywall in
+          // free mode, but this prevents stale cached 402s from triggering
+          // the upgrade panel in the frontend either. The showUpgradeMessage
+          // function and .upgrade-panel CSS are intentionally preserved so
+          // they can be re-enabled when payments go live.
+          //
+          // if (response.status === 402) {
+          //   showUpgradeMessage(data.upgrade_url || "/pricing");
+          //   return;
+          // }
           throw new Error(formatApiError(data));
         }
 

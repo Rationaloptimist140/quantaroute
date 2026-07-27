@@ -44,7 +44,15 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "admin-bypass-subscription-2026-07-17"
+APP_BUILD = "free-mode-status-2026-07-27"
+
+# --- Free mode toggle ---------------------------------------------------
+# Set FREE_MODE=true in the environment (or leave it as the default below)
+# to bypass ALL payment/trial gating. Every visitor gets full access. The
+# Stripe code, endpoints, webhooks, and env vars stay in the codebase —
+# they're just disconnected from the active user flow so optimisation is
+# never blocked. Flip this to "" or "false" to re-enable payments later.
+FREE_MODE = os.getenv("FREE_MODE", "true").strip().lower() in {"1", "true", "yes"}
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -90,6 +98,7 @@ from database import (
 
 try:
     init_db()
+    logger.info("Database initialised: backend=%s", "postgres" if using_postgres() else "sqlite")
 except Exception:
     logger.exception(
         "Database initialisation failed during startup; continuing so /health can report diagnostics."
@@ -215,6 +224,19 @@ def stripe_checkout_configured() -> bool:
     return bool(stripe is not None and STRIPE_SECRET_KEY and STRIPE_PRICE_ID_MONTHLY)
 
 
+# --- Startup status log --------------------------------------------------
+logger.info("=== QuantaRoute startup ===")
+logger.info("  Build:       %s", APP_BUILD)
+logger.info("  FREE_MODE:   %s", FREE_MODE)
+logger.info("  Storage:     %s", "postgres" if using_postgres() else "sqlite")
+logger.info("  DATABASE_URL set: %s", bool(get_database_url()))
+logger.info("  ADMIN_KEY set:    %s", bool(ADMIN_KEY))
+logger.info("  STRIPE_SECRET_KEY set:       %s", bool(STRIPE_SECRET_KEY))
+logger.info("  STRIPE_PRICE_ID_MONTHLY set: %s", bool(STRIPE_PRICE_ID_MONTHLY))
+logger.info("  STRIPE_WEBHOOK_SECRET set:   %s", bool(STRIPE_WEBHOOK_SECRET))
+logger.info("===========================")
+
+
 def stripe_not_configured_response() -> JSONResponse:
     return JSONResponse(
         status_code=503,
@@ -307,6 +329,11 @@ def get_client_identifier(request: Request) -> str:
 
 
 def enforce_usage_limit(request: Request) -> JSONResponse | None:
+    # --- Free mode: skip all payment/trial checks -----------------------
+    if FREE_MODE:
+        logger.info("FREE_MODE active — access granted for %s", get_client_identifier(request))
+        return None
+
     if is_admin_request(request):
         logger.info("Admin bypass granted for %s", get_client_identifier(request))
         return None
@@ -777,6 +804,7 @@ def health():
         "service": "QuantaRoute API",
         "version": "1.0.0",
         "build": APP_BUILD,
+        "free_mode": FREE_MODE,
         "storage_backend": "postgres" if using_postgres() else "sqlite",
         "database_configured": bool(get_database_url()),
     }
@@ -806,6 +834,99 @@ def health_deep():
         "stripe_price_id_set": bool(STRIPE_PRICE_ID_MONTHLY),
         "stripe_webhook_secret_set": bool(STRIPE_WEBHOOK_SECRET),
         "stripe_checkout_configured": stripe_checkout_configured(),
+        "free_mode": FREE_MODE,
+    }
+
+
+@app.get("/api/status", tags=["Operations"])
+async def api_status():
+    """Check operational status of the API and its core external dependencies.
+
+    Returns the reachability of:
+    - postcodes.io (UK postcode geocoding)
+    - Nominatim / OpenStreetMap (address geocoding)
+    - OSRM (road-network distance matrix)
+    - Database (route history / API key storage)
+
+    Each service is probed with a lightweight request; failures are caught
+    and reported without crashing.
+    """
+    import httpx as _httpx
+
+    checks: dict = {}
+
+    # --- Database ---------------------------------------------------------
+    try:
+        get_recent_routes(limit=1)
+        checks["database"] = {"status": "ok", "backend": "postgres" if using_postgres() else "sqlite"}
+    except Exception as e:
+        checks["database"] = {"status": "error", "detail": str(e)}
+
+    # --- postcodes.io (postcode lookup) -----------------------------------
+    try:
+        async with _httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://api.postcodes.io/postcodes/SW1A1AA",
+                headers={"User-Agent": "QuantaRoute/1.0 (hi@quantaroute.co.uk)"},
+            )
+        checks["postcodes_io"] = {
+            "status": "ok" if r.status_code == 200 else "error",
+            "http_status": r.status_code,
+        }
+    except Exception as e:
+        checks["postcodes_io"] = {"status": "unreachable", "detail": str(e)}
+
+    # --- Nominatim (address geocoding) ------------------------------------
+    try:
+        async with _httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "https://nominatim.openstreetmap.org/search",
+                params={"q": "Plymouth, UK", "format": "json", "limit": 1},
+                headers={"User-Agent": "QuantaRoute/1.0 (hi@quantaroute.co.uk)"},
+            )
+        checks["nominatim"] = {
+            "status": "ok" if r.status_code == 200 else "error",
+            "http_status": r.status_code,
+        }
+    except Exception as e:
+        checks["nominatim"] = {"status": "unreachable", "detail": str(e)}
+
+    # --- OSRM (road distance matrix) --------------------------------------
+    try:
+        async with _httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(
+                "http://router.project-osrm.org/table/v1/driving/-4.1427,50.3755;-3.5339,50.7184",
+                params={"annotations": "distance"},
+            )
+        osrm_data = r.json() if r.status_code == 200 else {}
+        checks["osrm"] = {
+            "status": "ok" if osrm_data.get("code") == "Ok" else "error",
+            "http_status": r.status_code,
+        }
+    except Exception as e:
+        checks["osrm"] = {"status": "unreachable", "detail": str(e)}
+
+    # --- Environment variables --------------------------------------------
+    checks["env"] = {
+        "DATABASE_URL": bool(get_database_url()),
+        "ADMIN_KEY": bool(ADMIN_KEY),
+        "STRIPE_SECRET_KEY": bool(STRIPE_SECRET_KEY),
+        "STRIPE_PRICE_ID_MONTHLY": bool(STRIPE_PRICE_ID_MONTHLY),
+        "STRIPE_WEBHOOK_SECRET": bool(STRIPE_WEBHOOK_SECRET),
+        "FREE_MODE": FREE_MODE,
+    }
+
+    all_services_ok = all(
+        checks[svc].get("status") == "ok"
+        for svc in ["database", "postcodes_io", "nominatim", "osrm"]
+    )
+
+    return {
+        "status": "operational" if all_services_ok else "degraded",
+        "service": "QuantaRoute API",
+        "version": "1.0.0",
+        "build": APP_BUILD,
+        "checks": checks,
     }
 
 

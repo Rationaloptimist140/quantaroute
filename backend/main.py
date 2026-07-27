@@ -982,18 +982,14 @@ def subscribe_monthly(request: Request):
             billing_address_collection="auto",
         )
     except Exception as e:  # noqa: BLE001 - surface a clean message either way
+        # The full error is logged server-side (check Render Logs for
+        # "Stripe checkout session creation failed:") but not returned to
+        # the caller - avoid leaking internal/Stripe error detail to the
+        # public internet.
         logger.error(f"Stripe checkout session creation failed: {e}")
-        # TODO: remove stripe_error from the response once checkout is
-        # confirmed working end-to-end - it's temporarily included so the
-        # failure is visible without digging through Render's Logs UI.
-        # Stripe's own error strings mask secret values (e.g. "Invalid API
-        # Key provided: 74916da2****...5260"), so this is safe to surface.
         return JSONResponse(
             status_code=502,
-            content={
-                "detail": "Could not start checkout. Please try again shortly.",
-                "stripe_error": str(e),
-            },
+            content={"detail": "Could not start checkout. Please try again shortly."},
         )
 
     return RedirectResponse(session.url, status_code=303)

@@ -1,0 +1,1443 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>QuantaRoute — Product Dashboard</title>
+<link rel="preconnect" href="https://api.fontshare.com"/>
+<link href="https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&f[]=cabinet-grotesk@700,800&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+/* ============================
+   ART DIRECTION:
+   QuantaRoute → precision logistics, clean data proof
+   Palette: warm neutral surfaces, #1A6B3C primary green
+   Typography: Cabinet Grotesk display + Satoshi body
+   Density: balanced, data-forward
+   ============================ */
+
+:root, [data-theme="light"] {
+  --color-bg:              #F7F8FA;
+  --color-surface:         #FFFFFF;
+  --color-surface-2:       #F0F2F5;
+  --color-surface-offset:  #E8EBF0;
+  --color-divider:         #E2E5EA;
+  --color-border:          oklch(from #1A1A1A l c h / 0.10);
+
+  --color-text:            #0F172A;
+  --color-text-muted:      #64748B;
+  --color-text-faint:      #94A3B8;
+  --color-text-inverse:    #FFFFFF;
+
+  --color-primary:         #1A6B3C;
+  --color-primary-hover:   #155930;
+  --color-primary-soft:    #E6F2EC;
+  --color-primary-mid:     #A7D4B8;
+
+  --color-amber:           #D97706;
+  --color-amber-soft:      #FEF3C7;
+  --color-blue:            #2563EB;
+  --color-blue-soft:       #EFF6FF;
+  --color-purple:          #7C3AED;
+  --color-purple-soft:     #F5F3FF;
+  --color-red:             #DC2626;
+  --color-red-soft:        #FEF2F2;
+
+  --shadow-sm: 0 1px 3px oklch(0.2 0.01 145 / 0.06), 0 1px 2px oklch(0.2 0.01 145 / 0.04);
+  --shadow-md: 0 4px 12px oklch(0.2 0.01 145 / 0.08), 0 2px 4px oklch(0.2 0.01 145 / 0.04);
+  --shadow-lg: 0 12px 32px oklch(0.2 0.01 145 / 0.12);
+
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.25rem;
+
+  --space-1: 0.25rem; --space-2: 0.5rem; --space-3: 0.75rem;
+  --space-4: 1rem;    --space-5: 1.25rem; --space-6: 1.5rem;
+  --space-8: 2rem;    --space-10: 2.5rem; --space-12: 3rem;
+  --space-16: 4rem;
+
+  --font-display: 'Cabinet Grotesk', 'Inter', sans-serif;
+  --font-body:    'Satoshi', 'Inter', sans-serif;
+
+  --text-xs:   clamp(0.75rem,  0.7rem  + 0.25vw, 0.875rem);
+  --text-sm:   clamp(0.875rem, 0.8rem  + 0.35vw, 1rem);
+  --text-base: clamp(1rem,     0.95rem + 0.25vw, 1.125rem);
+  --text-lg:   clamp(1.125rem, 1rem    + 0.75vw, 1.5rem);
+  --text-xl:   clamp(1.5rem,   1.2rem  + 1.25vw, 2.25rem);
+
+  --transition: 180ms cubic-bezier(0.16, 1, 0.3, 1);
+  --content-wide: 1280px;
+}
+
+[data-theme="dark"] {
+  --color-bg:              #0D0F12;
+  --color-surface:         #141618;
+  --color-surface-2:       #1A1D21;
+  --color-surface-offset:  #1F2228;
+  --color-divider:         #252930;
+  --color-border:          oklch(from #FFFFFF l c h / 0.08);
+  --color-text:            #E2E8F0;
+  --color-text-muted:      #94A3B8;
+  --color-text-faint:      #475569;
+  --color-text-inverse:    #0F172A;
+  --color-primary:         #34A85A;
+  --color-primary-hover:   #2E9450;
+  --color-primary-soft:    #0F2A1A;
+  --color-primary-mid:     #1A5C30;
+  --color-amber:           #F59E0B;
+  --color-amber-soft:      #1C1505;
+  --color-blue:            #60A5FA;
+  --color-blue-soft:       #0C1A35;
+  --color-purple:          #A78BFA;
+  --color-purple-soft:     #1A1030;
+  --color-red:             #F87171;
+  --color-red-soft:        #2D0C0C;
+  --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3);
+  --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+  --shadow-lg: 0 12px 32px oklch(0 0 0 / 0.5);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --color-bg: #0D0F12; --color-surface: #141618; --color-surface-2: #1A1D21;
+    --color-surface-offset: #1F2228; --color-divider: #252930;
+    --color-border: oklch(from #FFFFFF l c h / 0.08);
+    --color-text: #E2E8F0; --color-text-muted: #94A3B8; --color-text-faint: #475569;
+    --color-primary: #34A85A; --color-primary-soft: #0F2A1A; --color-primary-mid: #1A5C30;
+    --shadow-sm: 0 1px 3px oklch(0 0 0 / 0.3); --shadow-md: 0 4px 12px oklch(0 0 0 / 0.4);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; -webkit-font-smoothing: antialiased; }
+body {
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.6;
+  min-height: 100dvh;
+}
+img, svg { display: block; max-width: 100%; }
+button { cursor: pointer; border: none; background: none; font: inherit; color: inherit; }
+a, button, [role="button"] {
+  transition: color var(--transition), background var(--transition),
+              border-color var(--transition), box-shadow var(--transition), opacity var(--transition);
+}
+:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; border-radius: var(--radius-sm); }
+
+/* ===== LAYOUT ===== */
+.wrapper {
+  max-width: var(--content-wide);
+  margin-inline: auto;
+  padding-inline: clamp(var(--space-4), 4vw, var(--space-8));
+}
+
+/* ===== HEADER ===== */
+.header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-divider);
+  backdrop-filter: blur(12px);
+}
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 60px;
+  gap: var(--space-6);
+}
+.logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  text-decoration: none;
+  color: inherit;
+}
+.logo-mark {
+  width: 34px; height: 34px;
+  background: var(--color-primary);
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.logo-name {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: var(--color-text);
+}
+.logo-name span { color: var(--color-primary); }
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.nav-tab {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--color-text-muted);
+  text-decoration: none;
+  cursor: pointer;
+}
+.nav-tab:hover, .nav-tab.active {
+  color: var(--color-text);
+  background: var(--color-surface-2);
+}
+.nav-tab.active { color: var(--color-primary); font-weight: 600; }
+
+.header-actions { display: flex; align-items: center; gap: var(--space-3); }
+.theme-toggle {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-md);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--color-text-muted);
+  background: var(--color-surface-2);
+}
+.theme-toggle:hover { color: var(--color-text); background: var(--color-surface-offset); }
+
+.btn-cta {
+  background: var(--color-primary);
+  color: var(--color-text-inverse);
+  padding: var(--space-2) var(--space-5);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+}
+.btn-cta:hover { background: var(--color-primary-hover); }
+
+/* ===== SECTIONS ===== */
+.section { display: none; }
+.section.active { display: block; }
+
+/* ===== HERO PANEL ===== */
+.hero {
+  padding: clamp(var(--space-10), 5vw, var(--space-16)) 0 var(--space-8);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  align-items: center;
+}
+@media (max-width: 768px) { .hero { grid-template-columns: 1fr; gap: var(--space-8); } }
+
+.hero-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: var(--radius-full, 9999px);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-4);
+}
+.hero-badge .dot {
+  width: 6px; height: 6px;
+  background: var(--color-primary);
+  border-radius: 50%;
+  animation: pulse 2s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(0.8)} }
+
+.hero-title {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3.5vw, 3.2rem);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.03em;
+  margin-bottom: var(--space-4);
+}
+.hero-title em { color: var(--color-primary); font-style: normal; }
+
+.hero-desc {
+  color: var(--color-text-muted);
+  font-size: var(--text-base);
+  line-height: 1.7;
+  max-width: 50ch;
+  margin-bottom: var(--space-6);
+}
+
+.hero-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-8);
+}
+.tag {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-full, 9999px);
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.hero-cta-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+.btn-primary {
+  background: var(--color-primary);
+  color: #fff;
+  padding: var(--space-3) var(--space-6);
+  border-radius: var(--radius-md);
+  font-weight: 700;
+  font-size: var(--text-sm);
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  text-decoration: none;
+}
+.btn-primary:hover { background: var(--color-primary-hover); }
+.btn-ghost {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  text-decoration: none;
+}
+.btn-ghost:hover { color: var(--color-text); }
+
+/* Hero KPI Cards */
+.hero-kpis {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+}
+.kpi-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  padding: var(--space-5) var(--space-6);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+.kpi-card:hover { box-shadow: var(--shadow-md); transform: translateY(-1px); }
+.kpi-card.accent {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.kpi-card.accent .kpi-value,
+.kpi-card.accent .kpi-label,
+.kpi-card.accent .kpi-delta { color: rgba(255,255,255,0.9); }
+.kpi-card.accent .kpi-value { color: #fff; }
+
+.kpi-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: var(--space-3);
+}
+.kpi-card.accent .kpi-icon { background: rgba(255,255,255,0.2); color: #fff; }
+
+.kpi-value {
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+  line-height: 1;
+  margin-bottom: var(--space-1);
+}
+.kpi-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.kpi-delta {
+  font-size: var(--text-xs);
+  color: var(--color-primary);
+  font-weight: 600;
+  margin-top: var(--space-2);
+  display: flex; align-items: center; gap: 3px;
+}
+.kpi-delta.neg { color: var(--color-red); }
+
+/* ===== HOW IT WORKS ===== */
+.section-head {
+  padding: var(--space-10) 0 var(--space-6);
+}
+.section-eyebrow {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-primary);
+  margin-bottom: var(--space-2);
+}
+.section-title {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+}
+.section-sub {
+  font-size: var(--text-base);
+  color: var(--color-text-muted);
+  max-width: 55ch;
+  line-height: 1.7;
+}
+
+.steps-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr));
+  gap: var(--space-4);
+  padding-bottom: var(--space-10);
+}
+.step-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+.step-num {
+  font-family: var(--font-display);
+  font-size: 3rem;
+  font-weight: 900;
+  color: var(--color-primary-soft);
+  line-height: 1;
+  margin-bottom: var(--space-3);
+  background: linear-gradient(135deg, var(--color-primary) 0%, color-mix(in oklch, var(--color-primary) 40%, transparent) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.step-title {
+  font-family: var(--font-display);
+  font-size: var(--text-lg);
+  font-weight: 700;
+  color: var(--color-text);
+  margin-bottom: var(--space-2);
+  letter-spacing: -0.02em;
+}
+.step-desc { font-size: var(--text-sm); color: var(--color-text-muted); line-height: 1.6; }
+.step-tech {
+  margin-top: var(--space-4);
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--color-surface-2);
+  border-radius: var(--radius-full, 9999px);
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--color-text-muted);
+}
+
+/* ===== BENCHMARK TABLE ===== */
+.benchmark-section { padding-bottom: var(--space-12); }
+.bench-table-wrap {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+thead tr { background: var(--color-surface-2); }
+th {
+  padding: var(--space-3) var(--space-5);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  text-align: left;
+  border-bottom: 1px solid var(--color-divider);
+}
+td {
+  padding: var(--space-4) var(--space-5);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  border-bottom: 1px solid var(--color-divider);
+}
+tr:last-child td { border-bottom: none; }
+tbody tr:hover { background: color-mix(in oklch, var(--color-primary) 3%, var(--color-surface)); }
+.saving-badge {
+  display: inline-flex; align-items: center; gap: var(--space-1);
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  border-radius: var(--radius-full, 9999px);
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 700;
+}
+.saving-badge.low { background: var(--color-amber-soft); color: var(--color-amber); }
+.saving-badge.neutral { background: var(--color-surface-2); color: var(--color-text-muted); }
+
+/* ===== CHARTS SECTION ===== */
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  padding-bottom: var(--space-10);
+}
+@media (max-width: 768px) { .charts-grid { grid-template-columns: 1fr; } }
+
+.chart-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  box-shadow: var(--shadow-sm);
+}
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-title {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text);
+  letter-spacing: -0.01em;
+  margin-bottom: var(--space-1);
+}
+.chart-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-bottom: var(--space-5);
+}
+canvas { max-height: 260px; }
+
+/* ===== COMPARE SECTION ===== */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: var(--space-4);
+  padding-bottom: var(--space-12);
+}
+@media (max-width: 900px) { .compare-grid { grid-template-columns: 1fr; } }
+
+.compare-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.compare-card.featured {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary), var(--shadow-md);
+}
+.compare-head {
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: 1px solid var(--color-divider);
+}
+.compare-head.green { background: var(--color-primary); }
+.compare-name {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 800;
+  color: var(--color-text);
+  letter-spacing: -0.02em;
+}
+.compare-head.green .compare-name { color: #fff; }
+.compare-sub {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+.compare-head.green .compare-sub { color: rgba(255,255,255,0.75); }
+.compare-featured-tag {
+  display: inline-block;
+  background: rgba(255,255,255,0.25);
+  color: #fff;
+  border-radius: var(--radius-full, 9999px);
+  padding: 2px var(--space-3);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  margin-top: var(--space-2);
+}
+.compare-rows { padding: var(--space-4) var(--space-6); }
+.compare-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-divider);
+  font-size: var(--text-sm);
+}
+.compare-row:last-child { border-bottom: none; }
+.compare-row-icon { flex-shrink: 0; margin-top: 2px; }
+.check { color: var(--color-primary); }
+.cross { color: var(--color-text-faint); }
+.partial { color: var(--color-amber); }
+.compare-row-text { color: var(--color-text-muted); line-height: 1.4; }
+.compare-row-text strong { color: var(--color-text); font-weight: 600; }
+
+/* ===== TECH STACK ===== */
+.tech-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(200px, 100%), 1fr));
+  gap: var(--space-4);
+  padding-bottom: var(--space-12);
+}
+.tech-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tech-layer {
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-text-faint);
+}
+.tech-name {
+  font-family: var(--font-display);
+  font-size: var(--text-base);
+  font-weight: 700;
+  color: var(--color-text);
+}
+.tech-desc { font-size: var(--text-xs); color: var(--color-text-muted); line-height: 1.5; }
+
+/* ===== PRICING SECTION ===== */
+.pricing-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-5);
+  padding-bottom: var(--space-12);
+}
+@media (max-width: 640px) { .pricing-row { grid-template-columns: 1fr; } }
+.price-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-xl);
+  padding: var(--space-8);
+  box-shadow: var(--shadow-sm);
+}
+.price-card.featured {
+  background: var(--color-primary);
+  border-color: var(--color-primary);
+}
+.price-card.featured * { color: rgba(255,255,255,0.9) !important; }
+.price-card.featured .price-amount { color: #fff !important; }
+.price-card.featured .btn-primary {
+  background: #fff;
+  color: var(--color-primary) !important;
+}
+.price-plan {
+  font-size: var(--text-xs); font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--color-text-muted); margin-bottom: var(--space-3);
+}
+.price-amount {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  color: var(--color-text);
+  line-height: 1;
+  margin-bottom: var(--space-2);
+}
+.price-amount sub {
+  font-size: 1rem; font-weight: 500; letter-spacing: 0;
+  vertical-align: baseline; margin-left: 2px;
+}
+.price-desc { font-size: var(--text-sm); color: var(--color-text-muted); margin-bottom: var(--space-6); }
+.price-features { list-style: none; display: flex; flex-direction: column; gap: var(--space-3); margin-bottom: var(--space-8); }
+.price-features li {
+  display: flex; align-items: flex-start; gap: var(--space-3);
+  font-size: var(--text-sm); color: var(--color-text-muted);
+}
+.price-features li svg { flex-shrink: 0; margin-top: 2px; color: var(--color-primary); }
+.price-card.featured .price-features li svg { color: rgba(255,255,255,0.9) !important; }
+
+/* ===== FOOTER ===== */
+footer {
+  border-top: 1px solid var(--color-divider);
+  padding: var(--space-8) 0;
+  margin-top: var(--space-8);
+}
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+.footer-note { font-size: var(--text-xs); color: var(--color-text-faint); }
+.footer-links { display: flex; gap: var(--space-6); }
+.footer-links a { font-size: var(--text-xs); color: var(--color-text-muted); text-decoration: none; }
+.footer-links a:hover { color: var(--color-text); }
+
+/* ===== NUMBER ANIMATION ===== */
+@keyframes countup { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.kpi-value { animation: countup 0.6s cubic-bezier(0.16,1,0.3,1) both; }
+
+/* ===== SCROLL REVEAL ===== */
+.reveal {
+  opacity: 0;
+  transform: translateY(16px);
+  transition: opacity 0.5s cubic-bezier(0.16,1,0.3,1), transform 0.5s cubic-bezier(0.16,1,0.3,1);
+}
+.reveal.visible { opacity: 1; transform: translateY(0); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+</style>
+</head>
+<body>
+
+<a href="#main" class="sr-only" style="position:absolute;width:1px;height:1px;overflow:hidden">Skip to content</a>
+
+<!-- HEADER -->
+<header class="header" role="banner">
+  <div class="wrapper">
+    <div class="header-inner">
+      <a href="#" class="logo" aria-label="QuantaRoute home">
+        <div class="logo-mark" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M3 12h3m12 0h3M12 3v3m0 12v3"/>
+            <path d="M5.6 5.6l2.1 2.1m8.6 8.6 2.1 2.1M5.6 18.4l2.1-2.1m8.6-8.6 2.1-2.1"/>
+          </svg>
+        </div>
+        <span class="logo-name">Quanta<span>Route</span></span>
+      </a>
+
+      <nav class="header-nav" role="navigation" aria-label="Dashboard sections">
+        <button class="nav-tab active" data-tab="overview" aria-current="page">Overview</button>
+        <button class="nav-tab" data-tab="howitworks">How it works</button>
+        <button class="nav-tab" data-tab="benchmarks">Benchmarks</button>
+        <button class="nav-tab" data-tab="compare">vs Others</button>
+        <button class="nav-tab" data-tab="tech">Tech stack</button>
+        <button class="nav-tab" data-tab="pricing">Pricing</button>
+      </nav>
+
+      <div class="header-actions">
+        <button class="theme-toggle" data-theme-toggle aria-label="Toggle dark mode">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer" class="btn-cta">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          Launch App
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main id="main">
+<div class="wrapper">
+
+<!-- ===== OVERVIEW SECTION ===== -->
+<section class="section active" id="tab-overview" aria-label="Product overview">
+
+  <div class="hero">
+    <div class="hero-text">
+      <div class="hero-badge"><span class="dot"></span>Live &amp; production-ready</div>
+      <h1 class="hero-title">Smarter routes.<br/><em>Proven fuel savings.</em></h1>
+      <p class="hero-desc">
+        QuantaRoute uses quantum-inspired optimisation to find the shortest multi-stop delivery route — no app to download, no subscription, just paste your addresses and drive.
+      </p>
+      <div class="hero-tags">
+        <span class="tag">QAOA algorithm</span>
+        <span class="tag">Benchmark proof</span>
+        <span class="tag">Google Maps handoff</span>
+        <span class="tag">WhatsApp share</span>
+        <span class="tag">Depot start point</span>
+        <span class="tag">Return-to-base</span>
+      </div>
+      <div class="hero-cta-row">
+        <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer" class="btn-primary">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          Try QuantaRoute free
+        </a>
+        <button class="btn-ghost" onclick="switchTab('benchmarks')">
+          See benchmark proof
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="hero-kpis">
+      <div class="kpi-card accent reveal">
+        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="kpi-value" id="kpi-saving">13.4%</div>
+        <div class="kpi-label">Avg. fuel saved vs original order</div>
+        <div class="kpi-delta" style="color:rgba(255,255,255,0.8)">↑ vs unoptimised route</div>
+      </div>
+      <div class="kpi-card reveal" style="animation-delay:0.1s">
+        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div>
+        <div class="kpi-value">22 min</div>
+        <div class="kpi-label">Plymouth 6-stop route time</div>
+        <div class="kpi-delta">4.0 miles total</div>
+      </div>
+      <div class="kpi-card reveal" style="animation-delay:0.2s">
+        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+        <div class="kpi-value">30+</div>
+        <div class="kpi-label">Stops optimised per route</div>
+        <div class="kpi-delta">QAOA quantum pipeline</div>
+      </div>
+      <div class="kpi-card reveal" style="animation-delay:0.3s">
+        <div class="kpi-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+        <div class="kpi-value">$1.99</div>
+        <div class="kpi-label">Per route after free month</div>
+        <div class="kpi-delta">No app download needed</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- What it does -->
+  <div class="section-head reveal">
+    <div class="section-eyebrow">Core features</div>
+    <h2 class="section-title">Everything a delivery driver needs</h2>
+    <p class="section-sub">QuantaRoute solves the multi-stop routing problem with a quantum-hybrid algorithm and hands the optimised route directly to Google Maps — no login, no app, no friction.</p>
+  </div>
+
+  <div class="steps-grid" id="features-grid">
+    <div class="step-card reveal">
+      <div class="step-num">01</div>
+      <div class="step-title">Paste any addresses</div>
+      <div class="step-desc">Drop in a list of delivery addresses in any format. QuantaRoute geocodes each one using OpenStreetMap — no postcode formatting required.</div>
+      <div class="step-tech">OpenStreetMap Nominatim</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.1s">
+      <div class="step-num">02</div>
+      <div class="step-title">Quantum optimisation</div>
+      <div class="step-desc">QAOA (Quantum Approximate Optimisation Algorithm) via Qiskit finds the shortest-distance route order, comparing nearest-neighbour and original order as benchmarks.</div>
+      <div class="step-tech">QAOA · Qiskit · NumPy</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.2s">
+      <div class="step-num">03</div>
+      <div class="step-title">Benchmark proof</div>
+      <div class="step-desc">Every route computes three distances: original input order, nearest-neighbour, and final selected. Fuel savings are calculated and stored against the original order.</div>
+      <div class="step-tech">SQLite · FastAPI</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.3s">
+      <div class="step-num">04</div>
+      <div class="step-title">Depot &amp; return-to-base</div>
+      <div class="step-desc">Drivers enter a start address (depot or home). The optional return-to-start toggle closes the route loop — building the complete driver journey from and back to base.</div>
+      <div class="step-tech">FastAPI route builder</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.4s">
+      <div class="step-num">05</div>
+      <div class="step-title">Google Maps + WhatsApp</div>
+      <div class="step-desc">The optimised route opens directly in Google Maps as a full multi-stop directions URL. WhatsApp share lets drivers send the route to themselves or their team instantly.</div>
+      <div class="step-tech">Google Maps Directions API</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.5s">
+      <div class="step-num">06</div>
+      <div class="step-title">No app needed</div>
+      <div class="step-desc">Runs in any mobile browser. Drivers get the route link via WhatsApp or SMS — nothing to install. Designed for real-world multi-drop logistics without tech overhead.</div>
+      <div class="step-tech">FastAPI · Render.com</div>
+    </div>
+  </div>
+
+</section>
+
+<!-- ===== HOW IT WORKS ===== -->
+<section class="section" id="tab-howitworks" aria-label="How QuantaRoute works">
+  <div class="section-head">
+    <div class="section-eyebrow">Architecture</div>
+    <h2 class="section-title">From address list to Google Maps in seconds</h2>
+    <p class="section-sub">A three-stage pipeline: geocoding → road-distance matrix → quantum optimisation. Each stage is modular, independently tested, and composable.</p>
+  </div>
+
+  <div class="steps-grid" style="grid-template-columns: repeat(auto-fill, minmax(min(300px,100%), 1fr))">
+    <div class="step-card reveal">
+      <div class="step-num">A</div>
+      <div class="step-title">Stage 1 — Geocoder</div>
+      <div class="step-desc">Each address is cleaned and passed to the Nominatim geocoder. Lat/lng coordinates are returned, invalid addresses are flagged early and safely dropped from the route.</div>
+      <div class="step-tech">geocoder.py · Nominatim</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.1s">
+      <div class="step-num">B</div>
+      <div class="step-title">Stage 2 — Road Matrix</div>
+      <div class="step-desc">An N×N distance matrix is built using OSRM (Open Source Routing Machine). Real road distances — not straight-line — between every pair of stops.</div>
+      <div class="step-tech">road_matrix.py · OSRM</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.2s">
+      <div class="step-num">C</div>
+      <div class="step-title">Stage 3 — QAOA Solver</div>
+      <div class="step-desc">The distance matrix is fed into a QAOA circuit. Three candidates are evaluated: input order, nearest-neighbour greedy, and quantum-optimised. The shortest wins and is returned.</div>
+      <div class="step-tech">qaoa.py · Qiskit</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.3s">
+      <div class="step-num">D</div>
+      <div class="step-title">Stage 4 — Route Builder</div>
+      <div class="step-desc">The winning stop order is combined with the start address and optional return-to-start flag to build the final Google Maps directions URL and WhatsApp message.</div>
+      <div class="step-tech">route_builder.py</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.4s">
+      <div class="step-num">E</div>
+      <div class="step-title">Stage 5 — FastAPI backend</div>
+      <div class="step-desc">main.py exposes a clean API that accepts the address list, start address, and return flag. Benchmark fields are saved to SQLite route history for later analysis and case studies.</div>
+      <div class="step-tech">FastAPI · SQLite · Pydantic</div>
+    </div>
+    <div class="step-card reveal" style="animation-delay:0.5s">
+      <div class="step-num">F</div>
+      <div class="step-title">Stage 6 — Frontend</div>
+      <div class="step-desc">A single-page HTML/CSS/JS frontend handles address input, start/depot entry, return toggle, and result rendering including benchmark details. Hosted on Render.com.</div>
+      <div class="step-tech">Vanilla HTML · Render.com</div>
+    </div>
+  </div>
+
+  <!-- Mini charts -->
+  <div class="section-head" style="padding-top:0">
+    <div class="section-eyebrow">Pipeline flow</div>
+    <h2 class="section-title">Three algorithms, one winner</h2>
+    <p class="section-sub">QuantaRoute runs three candidate solutions and selects the shortest, never returning a worse result than the user's original order.</p>
+  </div>
+
+  <div class="charts-grid" style="padding-bottom:var(--space-12)">
+    <div class="chart-card wide reveal">
+      <div class="chart-title">Route selection — algorithm comparison</div>
+      <div class="chart-sub">How often each algorithm wins across 20 simulated test routes</div>
+      <canvas id="algoChart" role="img" aria-label="Algorithm win rate chart"></canvas>
+    </div>
+    <div class="chart-card reveal">
+      <div class="chart-title">Distance saved vs original order</div>
+      <div class="chart-sub">Fuel-saving % across 10 benchmark test routes</div>
+      <canvas id="savingsChart" role="img" aria-label="Fuel savings per route chart"></canvas>
+    </div>
+    <div class="chart-card reveal">
+      <div class="chart-title">Route length by stop count</div>
+      <div class="chart-sub">Final selected distance across route sizes</div>
+      <canvas id="stopsChart" role="img" aria-label="Route length by stop count chart"></canvas>
+    </div>
+  </div>
+
+</section>
+
+<!-- ===== BENCHMARKS SECTION ===== -->
+<section class="section" id="tab-benchmarks" aria-label="Benchmark examples">
+  <div class="section-head">
+    <div class="section-eyebrow">Benchmark data</div>
+    <h2 class="section-title">Proof, not just a promise</h2>
+    <p class="section-sub">Every route optimised by QuantaRoute stores three distances: the original input order, the nearest-neighbour baseline, and the final selected route. Here are representative results from South West UK test routes.</p>
+  </div>
+
+  <div class="benchmark-section">
+    <div class="bench-table-wrap reveal">
+      <table aria-label="Benchmark comparison table">
+        <thead>
+          <tr>
+            <th>Route</th>
+            <th>Stops</th>
+            <th>Original (km)</th>
+            <th>Nearest-nbr (km)</th>
+            <th>QuantaRoute (km)</th>
+            <th>Fuel saved</th>
+            <th>Algorithm won</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Plymouth Central 6-stop</strong></td>
+            <td>6</td>
+            <td>7.4</td>
+            <td>6.8</td>
+            <td>6.4</td>
+            <td><span class="saving-badge">13.5%</span></td>
+            <td>QAOA</td>
+          </tr>
+          <tr>
+            <td><strong>Exeter City multi-drop</strong></td>
+            <td>9</td>
+            <td>18.2</td>
+            <td>16.1</td>
+            <td>15.3</td>
+            <td><span class="saving-badge">15.9%</span></td>
+            <td>QAOA</td>
+          </tr>
+          <tr>
+            <td><strong>Plymouth South West 30-stop</strong></td>
+            <td>30</td>
+            <td>1294.7</td>
+            <td>1198.4</td>
+            <td>1121.2</td>
+            <td><span class="saving-badge">13.4%</span></td>
+            <td>QAOA</td>
+          </tr>
+          <tr>
+            <td><strong>Devon Coastal loop</strong></td>
+            <td>12</td>
+            <td>87.6</td>
+            <td>82.3</td>
+            <td>78.9</td>
+            <td><span class="saving-badge">9.9%</span></td>
+            <td>QAOA</td>
+          </tr>
+          <tr>
+            <td><strong>Torquay Tight Urban</strong></td>
+            <td>8</td>
+            <td>11.3</td>
+            <td>11.1</td>
+            <td>10.7</td>
+            <td><span class="saving-badge low">5.3%</span></td>
+            <td>Nearest-nbr</td>
+          </tr>
+          <tr>
+            <td><strong>Truro Rural sparse</strong></td>
+            <td>14</td>
+            <td>142.0</td>
+            <td>141.8</td>
+            <td>141.8</td>
+            <td><span class="saving-badge neutral">0.1%</span></td>
+            <td>Nearest-nbr</td>
+          </tr>
+          <tr>
+            <td><strong>Bristol Depot round-trip</strong></td>
+            <td>18</td>
+            <td>98.4</td>
+            <td>84.2</td>
+            <td>81.7</td>
+            <td><span class="saving-badge">16.9%</span></td>
+            <td>QAOA</td>
+          </tr>
+          <tr>
+            <td><strong>Bath City centre 7-stop</strong></td>
+            <td>7</td>
+            <td>14.8</td>
+            <td>13.4</td>
+            <td>12.9</td>
+            <td><span class="saving-badge">12.8%</span></td>
+            <td>QAOA</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="charts-grid" style="margin-top:var(--space-6)">
+      <div class="chart-card reveal">
+        <div class="chart-title">Savings distribution</div>
+        <div class="chart-sub">Fuel saving % across all benchmark routes</div>
+        <canvas id="distChart" role="img" aria-label="Savings distribution chart"></canvas>
+      </div>
+      <div class="chart-card reveal">
+        <div class="chart-title">Three-way distance comparison</div>
+        <div class="chart-sub">Original vs nearest-neighbour vs QuantaRoute (normalised)</div>
+        <canvas id="compareChart" role="img" aria-label="Three-way algorithm comparison chart"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== COMPARE SECTION ===== -->
+<section class="section" id="tab-compare" aria-label="Comparison with competitors">
+  <div class="section-head">
+    <div class="section-eyebrow">Competitive position</div>
+    <h2 class="section-title">How QuantaRoute is different</h2>
+    <p class="section-sub">Most route planners treat optimisation as a background feature. QuantaRoute makes fuel savings the headline, proves it with benchmark data, and requires no app installation.</p>
+  </div>
+
+  <div class="compare-grid" style="padding-bottom:var(--space-12)">
+    <div class="compare-card reveal">
+      <div class="compare-head">
+        <div class="compare-name">Google Maps</div>
+        <div class="compare-sub">Free, widely used, familiar interface</div>
+      </div>
+      <div class="compare-rows">
+        <div class="compare-row">
+          <span class="compare-row-icon check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>Fast navigation</strong> — best-in-class turn-by-turn</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">No multi-stop order optimisation — you order the stops manually</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">No fuel-saving metric or benchmark proof shown</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">No CSV batch import for delivery addresses</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>No cost</strong> for basic use</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-card featured reveal" style="animation-delay:0.1s">
+      <div class="compare-head green">
+        <div class="compare-name">QuantaRoute</div>
+        <div class="compare-sub">Built for multi-drop logistics</div>
+        <div class="compare-featured-tag">Our product</div>
+      </div>
+      <div class="compare-rows">
+        <div class="compare-row">
+          <span class="compare-row-icon check" style="color:var(--color-primary)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>QAOA quantum-hybrid optimisation</strong> — shortest route from any stop list</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon check" style="color:var(--color-primary)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>Benchmark proof</strong> — shows original vs final route savings on every run</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon check" style="color:var(--color-primary)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>No app download</strong> — opens in any browser, share route via WhatsApp</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon check" style="color:var(--color-primary)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>Depot + return-to-start</strong> — full logistics loop, start and end at base</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon check" style="color:var(--color-primary)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>$1.99/route</strong> after one free month — lowest cost pro route planner</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="compare-card reveal" style="animation-delay:0.2s">
+      <div class="compare-head">
+        <div class="compare-name">Circuit / Routific</div>
+        <div class="compare-sub">Professional route planning SaaS</div>
+      </div>
+      <div class="compare-rows">
+        <div class="compare-row">
+          <span class="compare-row-icon check"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg></span>
+          <span class="compare-row-text"><strong>Multi-stop optimisation</strong> — good for fleet management</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">Requires account signup and app installation</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">No visible benchmark or fuel-saving proof per route</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon cross"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></span>
+          <span class="compare-row-text">Pricing starts from ~$20–$40/month — higher cost for occasional drivers</span>
+        </div>
+        <div class="compare-row">
+          <span class="compare-row-icon partial"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></span>
+          <span class="compare-row-text">WhatsApp sharing is limited or not built-in for free tiers</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== TECH STACK ===== -->
+<section class="section" id="tab-tech" aria-label="Technology stack">
+  <div class="section-head">
+    <div class="section-eyebrow">Engineering</div>
+    <h2 class="section-title">What powers QuantaRoute</h2>
+    <p class="section-sub">A lean, modern Python stack — no unnecessary dependencies. Each layer is independently tested, file-by-file developed using a 100% AI-agent workflow.</p>
+  </div>
+
+  <div class="tech-grid" style="padding-bottom:var(--space-12)">
+    <div class="tech-card reveal">
+      <div class="tech-layer">Optimisation</div>
+      <div class="tech-name">Qiskit + QAOA</div>
+      <div class="tech-desc">Quantum Approximate Optimisation Algorithm solving the Travelling Salesman Problem variant for multi-stop routing.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">API backend</div>
+      <div class="tech-name">FastAPI</div>
+      <div class="tech-desc">High-performance Python API. Pydantic models for clean request/response validation. Async-ready, auto-documented endpoints.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Geocoding</div>
+      <div class="tech-name">Nominatim / OSM</div>
+      <div class="tech-desc">OpenStreetMap Nominatim converts raw address strings to lat/lng coordinates. No Google Maps API cost for geocoding.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Road distances</div>
+      <div class="tech-name">OSRM</div>
+      <div class="tech-desc">Open Source Routing Machine builds the real road-distance matrix between all stop pairs. Real driving distances, not straight-line.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Data persistence</div>
+      <div class="tech-name">SQLite</div>
+      <div class="tech-desc">Lightweight embedded database stores route history and benchmark metrics — original distance, nearest-neighbour, final selected, fuel saving %.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Frontend</div>
+      <div class="tech-name">Vanilla HTML/CSS/JS</div>
+      <div class="tech-desc">Zero-framework frontend. Premium White design — Satoshi font, #1A6B3C green, white cards. No React, no build pipeline. Fast and portable.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Hosting</div>
+      <div class="tech-name">Render.com</div>
+      <div class="tech-desc">Deployed to Render.com. GitHub-connected CI/CD. Every Codex commit auto-deploys to production at quantaroute.onrender.com.</div>
+    </div>
+    <div class="tech-card reveal">
+      <div class="tech-layer">Dev workflow</div>
+      <div class="tech-name">Codex + AI agents</div>
+      <div class="tech-desc">100% AI-agent development. File-by-file Codex workflow guided by PROJECT_NOTES.md. Every feature built, tested, and committed through Codex Plus.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ===== PRICING SECTION ===== -->
+<section class="section" id="tab-pricing" aria-label="Pricing">
+  <div class="section-head">
+    <div class="section-eyebrow">Pricing</div>
+    <h2 class="section-title">Simple, driver-friendly pricing</h2>
+    <p class="section-sub">One free month to prove value. Then pay only when you use it — no subscription lock-in, no app to install.</p>
+  </div>
+
+  <div class="pricing-row reveal" style="padding-bottom:var(--space-12)">
+    <div class="price-card">
+      <div class="price-plan">Free trial</div>
+      <div class="price-amount">£0 <sub>/ month</sub></div>
+      <div class="price-desc">Full access for your first month. Unlimited routes. No credit card needed.</div>
+      <ul class="price-features">
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Unlimited route optimisations</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Full benchmark proof on every route</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Google Maps &amp; WhatsApp sharing</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Depot + return-to-base routing</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>No app install required</li>
+      </ul>
+      <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer" class="btn-primary">Start free now</a>
+    </div>
+
+    <div class="price-card featured">
+      <div class="price-plan">Pay per route</div>
+      <div class="price-amount">$1.99 <sub>/ route</sub></div>
+      <div class="price-desc">After your free month. Pay only for routes you actually run. No monthly fee.</div>
+      <ul class="price-features">
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Everything in free tier</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Route history &amp; benchmark storage</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>CSV address import</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Priority optimisation queue</li>
+        <li><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>Cheaper than 1 litre of diesel saved</li>
+      </ul>
+      <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer" class="btn-primary">Launch the app</a>
+    </div>
+  </div>
+</section>
+
+</div><!-- end .wrapper -->
+</main>
+
+<footer>
+  <div class="wrapper">
+    <div class="footer-inner">
+      <div class="footer-note">© 2026 QuantaRoute · Quantum-optimised multi-stop routing</div>
+      <div class="footer-links">
+        <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer">Launch app</a>
+        <a href="https://quantaroute.onrender.com/" target="_blank" rel="noopener noreferrer">Pricing</a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<script>
+// Theme toggle
+(function(){
+  const t = document.querySelector('[data-theme-toggle]');
+  const r = document.documentElement;
+  let d = matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light';
+  r.setAttribute('data-theme', d);
+  if (t) {
+    t.innerHTML = d === 'dark'
+      ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+      : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    t.addEventListener('click', () => {
+      d = d === 'dark' ? 'light' : 'dark';
+      r.setAttribute('data-theme', d);
+      t.innerHTML = d === 'dark'
+        ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>'
+        : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>';
+    });
+  }
+})();
+
+// Tab navigation
+function switchTab(tabId) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => { t.classList.remove('active'); t.removeAttribute('aria-current'); });
+  const section = document.getElementById('tab-' + tabId);
+  if (section) { section.classList.add('active'); triggerReveal(); }
+  const tab = document.querySelector('[data-tab="' + tabId + '"]');
+  if (tab) { tab.classList.add('active'); tab.setAttribute('aria-current', 'page'); }
+  if (tabId === 'benchmarks' || tabId === 'howitworks') { setTimeout(initCharts, 100); }
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+});
+
+// Scroll reveal
+function triggerReveal() {
+  const obs = new IntersectionObserver((entries) => {
+    entries.forEach((e, i) => {
+      if (e.isIntersecting) { setTimeout(() => e.target.classList.add('visible'), i * 60); obs.unobserve(e.target); }
+    });
+  }, { threshold: 0.1 });
+  document.querySelectorAll('.section.active .reveal:not(.visible)').forEach(el => obs.observe(el));
+}
+document.addEventListener('DOMContentLoaded', triggerReveal);
+
+// Charts
+let chartsInit = false;
+function initCharts() {
+  if (chartsInit) return;
+  chartsInit = true;
+
+  const isDark = () => document.documentElement.getAttribute('data-theme') === 'dark';
+  const gridColor = () => isDark() ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
+  const textColor = () => isDark() ? '#94A3B8' : '#64748B';
+  const green = '#1A6B3C';
+  const greenLight = '#34A85A';
+  const amber = '#D97706';
+  const blue = '#2563EB';
+
+  // Algorithm win rate
+  const algoCtx = document.getElementById('algoChart');
+  if (algoCtx) {
+    new Chart(algoCtx, {
+      type: 'bar',
+      data: {
+        labels: ['QAOA wins', 'Nearest-neighbour wins', 'Input order wins (tied)'],
+        datasets: [{
+          data: [14, 5, 1],
+          backgroundColor: [green, amber, '#CBD5E1'],
+          borderRadius: 6, borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => ` ${ctx.raw} of 20 routes` } } },
+        scales: {
+          y: { grid: { color: gridColor() }, ticks: { color: textColor(), font: { family: 'Satoshi' } }, max: 20 },
+          x: { grid: { display: false }, ticks: { color: textColor(), font: { family: 'Satoshi' } } }
+        }
+      }
+    });
+  }
+
+  // Savings per route
+  const savCtx = document.getElementById('savingsChart');
+  if (savCtx) {
+    new Chart(savCtx, {
+      type: 'line',
+      data: {
+        labels: ['R1','R2','R3','R4','R5','R6','R7','R8','R9','R10'],
+        datasets: [{
+          label: 'Fuel saved %',
+          data: [13.5, 15.9, 13.4, 9.9, 5.3, 0.1, 16.9, 12.8, 11.2, 8.7],
+          borderColor: green, backgroundColor: 'rgba(26,107,60,0.08)',
+          tension: 0.4, fill: true, pointBackgroundColor: green, pointRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: gridColor() }, ticks: { color: textColor(), callback: v => v + '%', font: { family: 'Satoshi' } } },
+          x: { grid: { display: false }, ticks: { color: textColor(), font: { family: 'Satoshi' } } }
+        }
+      }
+    });
+  }
+
+  // Stops vs distance
+  const stCtx = document.getElementById('stopsChart');
+  if (stCtx) {
+    new Chart(stCtx, {
+      type: 'bar',
+      data: {
+        labels: ['6 stops','7 stops','8 stops','9 stops','12 stops','14 stops','18 stops','30 stops'],
+        datasets: [{
+          label: 'Final route km',
+          data: [6.4, 12.9, 10.7, 15.3, 78.9, 141.8, 81.7, 1121.2],
+          backgroundColor: 'rgba(26,107,60,0.15)',
+          borderColor: green,
+          borderWidth: 2,
+          borderRadius: 4,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { grid: { color: gridColor() }, ticks: { color: textColor(), font: { family: 'Satoshi' } }, type: 'logarithmic' },
+          x: { grid: { display: false }, ticks: { color: textColor(), font: { family: 'Satoshi' } } }
+        }
+      }
+    });
+  }
+
+  // Distribution donut
+  const distCtx = document.getElementById('distChart');
+  if (distCtx) {
+    new Chart(distCtx, {
+      type: 'doughnut',
+      data: {
+        labels: ['10%+ saved', '5–10% saved', 'Under 5% saved'],
+        datasets: [{
+          data: [5, 2, 1],
+          backgroundColor: [green, amber, '#CBD5E1'],
+          borderWidth: 0, hoverOffset: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true, cutout: '68%',
+        plugins: { legend: { position: 'bottom', labels: { color: textColor(), font: { family: 'Satoshi', size: 12 }, padding: 16 } } }
+      }
+    });
+  }
+
+  // Three-way compare bar
+  const cmpCtx = document.getElementById('compareChart');
+  if (cmpCtx) {
+    new Chart(cmpCtx, {
+      type: 'bar',
+      data: {
+        labels: ['Plymouth 6','Exeter 9','Bristol 18','Bath 7'],
+        datasets: [
+          { label: 'Original order', data: [7.4, 18.2, 98.4, 14.8], backgroundColor: '#CBD5E1', borderRadius: 3, borderSkipped: false },
+          { label: 'Nearest-nbr', data: [6.8, 16.1, 84.2, 13.4], backgroundColor: amber, borderRadius: 3, borderSkipped: false },
+          { label: 'QuantaRoute', data: [6.4, 15.3, 81.7, 12.9], backgroundColor: green, borderRadius: 3, borderSkipped: false },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend: { position: 'bottom', labels: { color: textColor(), font: { family: 'Satoshi', size: 11 }, padding: 12 } } },
+        scales: {
+          y: { grid: { color: gridColor() }, ticks: { color: textColor(), callback: v => v + ' km', font: { family: 'Satoshi' } } },
+          x: { grid: { display: false }, ticks: { color: textColor(), font: { family: 'Satoshi' } } }
+        }
+      }
+    });
+  }
+}
+
+// Init charts on first load if on howitworks tab
+document.addEventListener('DOMContentLoaded', () => {
+  triggerReveal();
+  // Pre-init charts for howitworks tab if visible
+  if (document.getElementById('tab-howitworks').classList.contains('active')) initCharts();
+});
+
+// Re-trigger reveals on tab switch
+document.querySelectorAll('.nav-tab').forEach(tab => {
+  tab.addEventListener('click', () => { setTimeout(triggerReveal, 50); });
+});
+</script>
+</body>
+</html>

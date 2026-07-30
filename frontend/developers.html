@@ -295,9 +295,9 @@
 
     <section class="card" aria-labelledby="apiTitle">
       <h2 id="apiTitle">Public API</h2>
-      <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route.</p>
+      <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route. The API is free to use.</p>
       <p><span class="endpoint">POST /api/optimise-route</span></p>
-      <p class="note"><strong>API keys:</strong> during public testing, API keys are optional. If you have a key, send it with <code>X-API-Key</code>. Invalid or inactive keys return <code>401</code>; keys that exceed their monthly limit return <code>429</code>. Paid/API access will require keys later.</p>
+      <p class="note"><strong>API keys:</strong> optional. If you have a key, send it with <code>X-API-Key</code>. Invalid or inactive keys return <code>401</code>; keys that exceed their monthly limit return <code>429</code>. Keys are a convenience for partners who want a dedicated rate allowance, not a payment mechanism - QuantaRoute has no billing system.</p>
 
       <div class="grid two">
         <article class="mini-card">
@@ -371,8 +371,8 @@
           <p>Local stdio server available</p>
         </article>
         <article class="mini-card">
-          <h3>Payments</h3>
-          <p>Not active yet</p>
+          <h3>Pricing</h3>
+          <p>Free - no billing system</p>
         </article>
         <article class="mini-card">
           <h3>Printable route sheet</h3>
@@ -415,7 +415,7 @@ npm start</code></pre>
       ],
       "env": {
         "QUANTAROUTE_API_BASE_URL": "https://quantaroute.co.uk",
-        "QUANTAROUTE_API_KEY": "optional-during-public-testing"
+        "QUANTAROUTE_API_KEY": "optional"
       }
     }
   }
@@ -426,7 +426,7 @@ npm start</code></pre>
 
     <section class="card" aria-labelledby="keysTitle">
       <h2 id="keysTitle">API Keys</h2>
-      <p class="lead">API keys are being prepared for paid access, rate limits, and partner integrations. They are optional while public testing remains open.</p>
+      <p class="lead">API keys are optional. They give partners and developers a dedicated rate allowance (monthly request limit) when integrating with the public API. QuantaRoute is free either way - keys are not a payment mechanism.</p>
       <p class="note">Keys are stored as one-way hashes. The raw key is only shown once when created.</p>
       <p class="note"><strong>Production warning:</strong> running <code>scripts/create_api_key.py</code> locally without <code>DATABASE_URL</code> creates the key in local SQLite, not live Render Postgres. That key will not work against production.</p>
       <h3>Method 1: local script with production DATABASE_URL</h3>
@@ -447,7 +447,7 @@ python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100<
   -H "Content-Type: application/json" \
   -H "X-API-Key: qr_your_key_here" \
   -d "{\"start\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"stops\":[\"Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA\",\"Royal William Yard, Plymouth, PL1 3RP\"],\"end\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"vehicle\":\"van\",\"optimise_for\":\"distance\"}"</code></pre>
-      <p class="note">No-key API testing still works while QuantaRoute is in public testing. Keys prepare the product for monthly limits and future paid access.</p>
+      <p class="note">No-key API usage works the same as keyed usage - both are free. Keys exist purely for partners who want a dedicated, predictable monthly request allowance.</p>
     </section>
 
     <section class="card" aria-labelledby="docsTitle">
@@ -460,10 +460,10 @@ python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100<
     </section>
 
     <section class="card" aria-labelledby="safetyTitle">
-      <h2 id="safetyTitle">Safety and Billing Notes</h2>
+      <h2 id="safetyTitle">Safety Notes</h2>
       <p class="note">QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic, road closures, vehicle restrictions, and professional judgement.</p>
       <p class="note">Do not include depot/start/end inside stops unless it is a real delivery stop.</p>
-      <p class="note">Stripe checkout is not active yet. QuantaRoute is currently free to test while payments are being prepared. API keys are optional for now and will become part of paid/API access later.</p>
+      <p class="note">QuantaRoute is free to use, with no billing, trial period, or payment provider involved.</p>
     </section>
 
     <footer class="footer">

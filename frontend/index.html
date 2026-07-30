@@ -263,31 +263,6 @@
       line-height: 1.5;
     }
 
-    .upgrade-panel {
-      color: var(--text);
-    }
-
-    .upgrade-panel strong {
-      display: block;
-      margin-bottom: 6px;
-      color: var(--success);
-      font-size: 1.02rem;
-    }
-
-    .upgrade-link {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      min-height: 42px;
-      margin-top: 12px;
-      padding: 0 14px;
-      border-radius: 10px;
-      background: var(--accent);
-      color: #FFFFFF;
-      font-weight: 600;
-      text-decoration: none;
-    }
-
     .hidden {
       display: none !important;
     }
@@ -1103,27 +1078,6 @@
       return "The optimisation service could not complete the route.";
     }
 
-    function showUpgradeMessage(upgradeUrl) {
-      message.innerHTML = "";
-      const panel = document.createElement("div");
-      panel.className = "upgrade-panel";
-
-      const title = document.createElement("strong");
-      title.textContent = "Your free month has ended 🎉 You've been optimising routes like a pro!";
-
-      const copy = document.createElement("span");
-      copy.textContent = "Continue for just £1.99 per route.";
-
-      const link = document.createElement("a");
-      link.className = "upgrade-link";
-      link.href = upgradeUrl || "/pricing";
-      link.textContent = "Upgrade Now";
-
-      panel.append(title, copy, link);
-      message.appendChild(panel);
-      message.classList.remove("hidden");
-    }
-
     function clearMessage() {
       message.textContent = "";
       message.classList.add("hidden");
@@ -1132,7 +1086,7 @@
     function cleanDisplayedAddress(address) {
       let text = String(address || "")
         .trim()
-        .replace(/^\uFEFF/, "")
+        .replace(/^﻿/, "")
         .trim()
         .replace(/^\d+\s*,\s*/, "")
         .trim()
@@ -1342,17 +1296,6 @@
         }
 
         if (!response.ok) {
-          // FREE MODE: 402 upgrade prompts are suppressed while the app
-          // is free to use. The backend already bypasses the paywall in
-          // free mode, but this prevents stale cached 402s from triggering
-          // the upgrade panel in the frontend either. The showUpgradeMessage
-          // function and .upgrade-panel CSS are intentionally preserved so
-          // they can be re-enabled when payments go live.
-          //
-          // if (response.status === 402) {
-          //   showUpgradeMessage(data.upgrade_url || "/pricing");
-          //   return;
-          // }
           throw new Error(formatApiError(data));
         }
 

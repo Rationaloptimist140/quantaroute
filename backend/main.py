@@ -7,15 +7,8 @@ import os
 import csv
 import io
 import re
-import secrets as secrets_lib
-import hashlib
 from pathlib import Path
 from typing import Literal
-
-try:
-    import stripe
-except ImportError:  # pragma: no cover - only needed once STRIPE_SECRET_KEY is set.
-    stripe = None
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
@@ -24,7 +17,7 @@ from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import logging
@@ -44,15 +37,7 @@ logger = logging.getLogger(__name__)
 
 CONTACT_EMAIL = "hi@quantaroute.co.uk"
 SUPPORT_EMAIL = "hi@quantaroute.co.uk"
-APP_BUILD = "free-mode-status-2026-07-27"
-
-# --- Free mode toggle ---------------------------------------------------
-# Set FREE_MODE=true in the environment (or leave it as the default below)
-# to bypass ALL payment/trial gating. Every visitor gets full access. The
-# Stripe code, endpoints, webhooks, and env vars stay in the codebase —
-# they're just disconnected from the active user flow so optimisation is
-# never blocked. Flip this to "" or "false" to re-enable payments later.
-FREE_MODE = os.getenv("FREE_MODE", "true").strip().lower() in {"1", "true", "yes"}
+APP_BUILD = "billing-removed-2026-07-30"
 
 app = FastAPI(
     title="QuantaRoute API",
@@ -80,17 +65,12 @@ if ASSETS_DIR.exists():
 
 from database import (
     api_keys_available,
-    create_api_key,
-    get_api_key_by_stripe_customer_id,
-    get_api_key_by_stripe_subscription,
     get_database_url,
     get_recent_routes,
     get_route_by_id,
     init_db,
-    record_allowed_route_use,
     record_usage_event,
     save_route,
-    set_api_key_active,
     usage_tracking_available,
     using_postgres,
     validate_and_record_api_key,
@@ -103,150 +83,16 @@ except Exception:
     logger.exception(
         "Database initialisation failed during startup; continuing so /health can report diagnostics."
     )
-UPGRADE_URL = "https://quantaroute.onrender.com/pricing"
 MAX_PUBLIC_ADDRESS_LENGTH = 240
 
-# --- Admin / owner bypass -----------------------------------------------
-#
-# The free-trial gate below (enforce_usage_limit) blocks any identifier (IP
-# address) 30 days after its first use, with no built-in exception for the
-# site owner. That meant the owner's own IP got permanently 402'd once their
-# original test traffic aged past 30 days. This section adds a durable,
-# env-configured bypass so that doesn't happen again:
-#
-#   ADMIN_KEY           - a shared secret. Visiting ANY URL once with
-#                          ?admin_key=<ADMIN_KEY> sets a long-lived signed
-#                          cookie that bypasses the trial/paywall gate on all
-#                          later requests from that browser. The same value
-#                          can also be sent as an X-Admin-Key header (useful
-#                          for scripts/Postman/curl instead of a browser).
-#   ADMIN_BYPASS_IPS     - optional comma-separated list of IP addresses that
-#                          always bypass the gate, no key needed. Useful as a
-#                          belt-and-braces fallback for a known static office
-#                          IP, but IPs change, so ADMIN_KEY is the primary
-#                          mechanism.
-#
-# Neither of these affects paying customers or the free-trial logic for
-# normal visitors; they only add an override path for the owner.
-ADMIN_KEY = os.getenv("ADMIN_KEY", "").strip()
-ADMIN_COOKIE_NAME = "qr_admin"
-ADMIN_BYPASS_IPS = {
-    ip.strip()
-    for ip in os.getenv("ADMIN_BYPASS_IPS", "").split(",")
-    if ip.strip()
-}
-
-
-def _admin_cookie_value() -> str:
-    if not ADMIN_KEY:
-        return ""
-    return hashlib.sha256(f"quantaroute-admin:{ADMIN_KEY}".encode("utf-8")).hexdigest()
-
-
-ADMIN_COOKIE_VALUE = _admin_cookie_value()
-
-
-def is_admin_request(request: Request) -> bool:
-    if not ADMIN_KEY and not ADMIN_BYPASS_IPS:
-        return False
-
-    if ADMIN_KEY:
-        header_key = request.headers.get("x-admin-key", "")
-        if header_key and secrets_lib.compare_digest(header_key, ADMIN_KEY):
-            return True
-
-        query_key = request.query_params.get("admin_key", "")
-        if query_key and secrets_lib.compare_digest(query_key, ADMIN_KEY):
-            return True
-
-        cookie_value = request.cookies.get(ADMIN_COOKIE_NAME, "")
-        if cookie_value and secrets_lib.compare_digest(cookie_value, ADMIN_COOKIE_VALUE):
-            return True
-
-    if ADMIN_BYPASS_IPS and get_client_identifier(request) in ADMIN_BYPASS_IPS:
-        return True
-
-    return False
-
-
-@app.middleware("http")
-async def admin_bypass_cookie_middleware(request: Request, call_next):
-    """If a valid admin_key query param is present, set a long-lived cookie
-    so the browser keeps bypassing the trial/paywall gate on later requests
-    without needing the query param every time."""
-    response = await call_next(request)
-    if ADMIN_KEY:
-        query_key = request.query_params.get("admin_key", "")
-        if query_key and secrets_lib.compare_digest(query_key, ADMIN_KEY):
-            response.set_cookie(
-                ADMIN_COOKIE_NAME,
-                ADMIN_COOKIE_VALUE,
-                max_age=60 * 60 * 24 * 365,
-                httponly=True,
-                samesite="lax",
-            )
-    return response
-
-# TODO: Add future per-identifier/IP/API-key rate limiting before wider launch.
-# TODO: Add future unauthenticated public traffic throttling before wider launch.
-
-# --- Stripe monthly plan (£1.99/month for up to 100 routes) -------------
-#
-# The monthly plan is modelled as an API key with monthly_limit=100 whose
-# is_active flag tracks the linked Stripe subscription (see
-# backend/database.py for the plan/stripe_customer_id/stripe_subscription_id
-# columns). Flow:
-#
-#   1. GET /subscribe/monthly creates a Stripe Checkout Session for the
-#      recurring price and redirects the browser to Stripe's hosted page.
-#   2. On success, Stripe redirects back to /subscribe/success?session_id=...
-#      which looks the API key up by the Checkout Session's customer id and
-#      shows the raw key once (Stripe's session_id is the proof of purchase).
-#   3. The webhook at POST /api/stripe/webhook is the source of truth: it
-#      creates the API key on checkout.session.completed, and flips
-#      is_active on customer.subscription.updated/deleted so a cancelled or
-#      failed-payment subscription stops granting free routes.
-#
-# All three env vars below must be set before this does anything; if they
-# are missing the subscribe endpoints return a clear 503 instead of crashing,
-# and the rest of the site (free trial, pay-per-route, admin bypass) is
-# unaffected either way.
-STRIPE_SECRET_KEY = os.getenv("STRIPE_SECRET_KEY", "").strip()
-STRIPE_PRICE_ID_MONTHLY = os.getenv("STRIPE_PRICE_ID_MONTHLY", "").strip()
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "").strip()
-MONTHLY_PLAN_ROUTE_LIMIT = 100
-
-if stripe is not None and STRIPE_SECRET_KEY:
-    stripe.api_key = STRIPE_SECRET_KEY
-
-
-def stripe_checkout_configured() -> bool:
-    return bool(stripe is not None and STRIPE_SECRET_KEY and STRIPE_PRICE_ID_MONTHLY)
-
-
 # --- Startup status log --------------------------------------------------
+# QuantaRoute is free for all users - no billing, trial, admin bypass, or
+# payment provider integration exists in this codebase.
 logger.info("=== QuantaRoute startup ===")
 logger.info("  Build:       %s", APP_BUILD)
-logger.info("  FREE_MODE:   %s", FREE_MODE)
 logger.info("  Storage:     %s", "postgres" if using_postgres() else "sqlite")
 logger.info("  DATABASE_URL set: %s", bool(get_database_url()))
-logger.info("  ADMIN_KEY set:    %s", bool(ADMIN_KEY))
-logger.info("  STRIPE_SECRET_KEY set:       %s", bool(STRIPE_SECRET_KEY))
-logger.info("  STRIPE_PRICE_ID_MONTHLY set: %s", bool(STRIPE_PRICE_ID_MONTHLY))
-logger.info("  STRIPE_WEBHOOK_SECRET set:   %s", bool(STRIPE_WEBHOOK_SECRET))
 logger.info("===========================")
-
-
-def stripe_not_configured_response() -> JSONResponse:
-    return JSONResponse(
-        status_code=503,
-        content={
-            "detail": (
-                "The monthly plan isn't set up yet. Email hi@quantaroute.co.uk "
-                "to get started, or check back shortly."
-            ),
-        },
-    )
 
 
 @app.exception_handler(RequestValidationError)
@@ -318,43 +164,6 @@ def record_route_history(
         logger.error(f"Failed to save route history: {e}")
         return None
 
-
-def get_client_identifier(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",")[0].strip()
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
-
-
-def enforce_usage_limit(request: Request) -> JSONResponse | None:
-    # --- Free mode: skip all payment/trial checks -----------------------
-    if FREE_MODE:
-        logger.info("FREE_MODE active — access granted for %s", get_client_identifier(request))
-        return None
-
-    if is_admin_request(request):
-        logger.info("Admin bypass granted for %s", get_client_identifier(request))
-        return None
-
-    identifier = get_client_identifier(request)
-    allowed, user = record_allowed_route_use(identifier)
-    if allowed:
-        logger.info(
-            "Usage allowed for %s; route_count=%s",
-            identifier,
-            user.get("route_count"),
-        )
-        return None
-
-    return JSONResponse(
-        status_code=402,
-        content={
-            "detail": "Free trial ended. Please upgrade to continue at £1.99 per route, or subscribe to the monthly plan.",
-            "upgrade_url": UPGRADE_URL,
-        },
-    )
 
 def is_csv_header_row(cells: list[str]) -> bool:
     headers = {
@@ -799,12 +608,13 @@ hi@quantaroute.co.uk
 
 @app.get("/health")
 def health():
+    """Lightweight liveness check. Fast, no external dependency checks, no
+    billing/payment fields - QuantaRoute has no billing system."""
     return {
         "status": "ok",
         "service": "QuantaRoute API",
         "version": "1.0.0",
         "build": APP_BUILD,
-        "free_mode": FREE_MODE,
         "storage_backend": "postgres" if using_postgres() else "sqlite",
         "database_configured": bool(get_database_url()),
     }
@@ -828,13 +638,18 @@ def health_deep():
         "route_history_available": route_history_available,
         "api_keys_available": api_keys_available(),
         "usage_tracking_available": usage_tracking_available(),
-        "admin_bypass_configured": bool(ADMIN_KEY or ADMIN_BYPASS_IPS),
-        "stripe_package_installed": stripe is not None,
-        "stripe_secret_key_set": bool(STRIPE_SECRET_KEY),
-        "stripe_price_id_set": bool(STRIPE_PRICE_ID_MONTHLY),
-        "stripe_webhook_secret_set": bool(STRIPE_WEBHOOK_SECRET),
-        "stripe_checkout_configured": stripe_checkout_configured(),
-        "free_mode": FREE_MODE,
+    }
+
+
+@app.get("/api/usage-status", tags=["Operations"])
+def usage_status():
+    """Simple access confirmation for the frontend. QuantaRoute is free to
+    use for everyone - there is no billing, trial, or subscription system,
+    so this always reports full access."""
+    return {
+        "has_access": True,
+        "free": True,
+        "message": "QuantaRoute is free to use. No account, trial, or payment required.",
     }
 
 
@@ -909,11 +724,6 @@ async def api_status():
     # --- Environment variables --------------------------------------------
     checks["env"] = {
         "DATABASE_URL": bool(get_database_url()),
-        "ADMIN_KEY": bool(ADMIN_KEY),
-        "STRIPE_SECRET_KEY": bool(STRIPE_SECRET_KEY),
-        "STRIPE_PRICE_ID_MONTHLY": bool(STRIPE_PRICE_ID_MONTHLY),
-        "STRIPE_WEBHOOK_SECRET": bool(STRIPE_WEBHOOK_SECRET),
-        "FREE_MODE": FREE_MODE,
     }
 
     all_services_ok = all(
@@ -963,174 +773,10 @@ def developers_page():
 
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
+    """QuantaRoute has no paid tiers - this route is kept reachable (rather
+    than removed/404) in case anything still links to /pricing, but it now
+    just serves a simple page confirming the product is free."""
     return frontend_file("pricing.html")
-
-
-@app.get("/subscribe/monthly", include_in_schema=False)
-def subscribe_monthly(request: Request):
-    """Start Stripe Checkout for the £1.99/month, up to 100 routes plan."""
-    if not stripe_checkout_configured():
-        return stripe_not_configured_response()
-
-    base_url = str(request.base_url).rstrip("/")
-    try:
-        session = stripe.checkout.Session.create(
-            mode="subscription",
-            line_items=[{"price": STRIPE_PRICE_ID_MONTHLY, "quantity": 1}],
-            success_url=f"{base_url}/subscribe/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{base_url}/pricing",
-            billing_address_collection="auto",
-        )
-    except Exception as e:  # noqa: BLE001 - surface a clean message either way
-        # The full error is logged server-side (check Render Logs for
-        # "Stripe checkout session creation failed:") but not returned to
-        # the caller - avoid leaking internal/Stripe error detail to the
-        # public internet.
-        logger.error(f"Stripe checkout session creation failed: {e}")
-        return JSONResponse(
-            status_code=502,
-            content={"detail": "Could not start checkout. Please try again shortly."},
-        )
-
-    return RedirectResponse(session.url, status_code=303)
-
-
-@app.get("/subscribe/success", response_class=HTMLResponse, include_in_schema=False)
-def subscribe_success(session_id: str = ""):
-    """Show the provisioned API key once, looked up via the Checkout Session
-    id Stripe redirected back with. The webhook (not this page) is the
-    source of truth for actually creating/activating the key - this page
-    just displays it if the webhook has already run."""
-    if not stripe_checkout_configured() or not session_id:
-        return HTMLResponse(
-            "<p>Missing or invalid checkout session. If you were charged, "
-            "email hi@quantaroute.co.uk and we'll sort out your API key.</p>",
-            status_code=400,
-        )
-
-    try:
-        session = stripe.checkout.Session.retrieve(session_id)
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Could not retrieve Stripe checkout session {session_id}: {e}")
-        return HTMLResponse(
-            "<p>Could not verify your checkout session. Email "
-            "hi@quantaroute.co.uk with your receipt and we'll sort out your "
-            "API key.</p>",
-            status_code=502,
-        )
-
-    customer_id = session.get("customer") if isinstance(session, dict) else getattr(session, "customer", None)
-    record = get_api_key_by_stripe_customer_id(customer_id) if customer_id else None
-
-    if record is None:
-        # The webhook usually beats the browser redirect, but if it hasn't
-        # landed yet, tell the customer their key is on the way rather than
-        # showing an error.
-        return HTMLResponse(
-            "<p>Thanks! Your subscription is being set up. Refresh this page "
-            "in a few seconds, or email hi@quantaroute.co.uk if your API key "
-            "doesn't appear shortly.</p>"
-        )
-
-    # Raw API keys are never stored in our database (only a SHA-256 hash) -
-    # the webhook stashes the raw key in Stripe Customer metadata for this
-    # one-time pickup, and we clear it immediately after showing it so it
-    # isn't sitting anywhere retrievable a second time.
-    raw_key = None
-    try:
-        customer = stripe.Customer.retrieve(customer_id)
-        raw_key = (customer.get("metadata") or {}).get("quantaroute_api_key")
-        if raw_key:
-            stripe.Customer.modify(customer_id, metadata={"quantaroute_api_key": ""})
-    except Exception as e:  # noqa: BLE001
-        logger.error(f"Could not read/clear API key metadata for customer {customer_id}: {e}")
-
-    if not raw_key:
-        return HTMLResponse(
-            "<h1>You're subscribed</h1>"
-            "<p>Up to 100 optimised routes per month. Your API key has "
-            "already been issued - if you didn't save it, email "
-            "hi@quantaroute.co.uk with your receipt and we'll reissue one.</p>"
-        )
-
-    return HTMLResponse(
-        "<h1>You're subscribed</h1>"
-        "<p>Up to 100 optimised routes per month. Save this API key now - it "
-        "will not be shown again:</p>"
-        f"<pre style='padding:16px;background:#f0fdf4;border-radius:8px;font-size:16px;'>{raw_key}</pre>"
-        "<p>Send it as the <code>X-API-Key</code> header on "
-        "<code>POST /api/optimise-route</code>. Questions: hi@quantaroute.co.uk</p>"
-    )
-
-
-@app.post("/api/stripe/webhook", include_in_schema=False)
-async def stripe_webhook(request: Request):
-    if stripe is None or not STRIPE_WEBHOOK_SECRET:
-        # Not configured yet; acknowledge so Stripe doesn't retry forever,
-        # but do nothing.
-        return JSONResponse(status_code=200, content={"received": False})
-
-    payload = await request.body()
-    signature = request.headers.get("stripe-signature", "")
-
-    try:
-        event = stripe.Webhook.construct_event(payload, signature, STRIPE_WEBHOOK_SECRET)
-    except Exception as e:  # noqa: BLE001 - invalid signature or payload
-        logger.warning(f"Stripe webhook signature verification failed: {e}")
-        raise HTTPException(status_code=400, detail="Invalid webhook signature")
-
-    event_type = event.get("type", "")
-    data_object = event.get("data", {}).get("object", {})
-
-    if event_type == "checkout.session.completed":
-        customer_id = data_object.get("customer")
-        subscription_id = data_object.get("subscription")
-        customer_email = (data_object.get("customer_details") or {}).get("email") or "Monthly Plan Customer"
-        if customer_id and subscription_id and get_api_key_by_stripe_customer_id(customer_id) is None:
-            record = create_api_key(
-                customer_email,
-                monthly_limit=MONTHLY_PLAN_ROUTE_LIMIT,
-                source_label="monthly_plan",
-                notes="Auto-provisioned by Stripe checkout.session.completed",
-                plan="monthly_100",
-                stripe_customer_id=customer_id,
-                stripe_subscription_id=subscription_id,
-            )
-            logger.info(
-                "Provisioned monthly-plan API key id=%s for stripe_customer=%s",
-                record.get("id"),
-                customer_id,
-            )
-            # Stash the raw key in Stripe Customer metadata for exactly one
-            # pickup by /subscribe/success - we never persist it ourselves
-            # (only its SHA-256 hash), and the success page clears this
-            # field the moment it's displayed.
-            try:
-                stripe.Customer.modify(
-                    customer_id,
-                    metadata={"quantaroute_api_key": record["api_key"]},
-                )
-            except Exception as e:  # noqa: BLE001
-                logger.error(
-                    f"Could not stash API key in Stripe customer metadata for {customer_id}: {e}"
-                )
-
-    elif event_type in {"customer.subscription.updated", "customer.subscription.deleted"}:
-        subscription_id = data_object.get("id")
-        status = data_object.get("status", "")
-        record = get_api_key_by_stripe_subscription(subscription_id) if subscription_id else None
-        if record is not None:
-            should_be_active = event_type == "customer.subscription.updated" and status in {"active", "trialing"}
-            set_api_key_active(record["id"], should_be_active)
-            logger.info(
-                "Set api_key id=%s active=%s from subscription %s status=%s",
-                record["id"],
-                should_be_active,
-                subscription_id,
-                status,
-            )
-
-    return JSONResponse(status_code=200, content={"received": True})
 
 
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
@@ -1150,9 +796,6 @@ async def upload_csv(
         raise HTTPException(status_code=400, detail="Need at least 2 addresses in CSV")
     if len(addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
-    usage_response = enforce_usage_limit(request)
-    if usage_response:
-        return usage_response
     try:
         result = await optimise_route(
             addresses=addresses,
@@ -1219,10 +862,6 @@ def route_sheet(route_id: int):
         400: {
             "model": PublicOptimiseRouteErrorResponse,
             "description": "Invalid route input or geocoding failure.",
-        },
-        402: {
-            "model": PublicOptimiseRouteErrorResponse,
-            "description": "Free trial ended.",
         },
         401: {
             "model": PublicOptimiseRouteErrorResponse,
@@ -1304,15 +943,6 @@ async def api_optimise_route(
             "TOO_MANY_STOPS",
             "The public API currently supports up to 20 delivery stops.",
             ["Split larger routes into smaller batches for now."],
-        )
-
-    usage_response = enforce_usage_limit(request) if api_client is None else None
-    if usage_response:
-        return public_api_error(
-            402,
-            "PAYMENT_REQUIRED",
-            "Free trial ended. Please upgrade to continue at £1.99 per route, or subscribe to the monthly plan.",
-            [UPGRADE_URL],
         )
 
     try:
@@ -1429,9 +1059,6 @@ async def route_optimise(route_request: RouteRequest, request: Request):
         raise HTTPException(status_code=400, detail="Need at least 2 addresses")
     if len(route_request.addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
-    usage_response = enforce_usage_limit(request)
-    if usage_response:
-        return usage_response
     try:
         result = await optimise_route(
             addresses=route_request.addresses,

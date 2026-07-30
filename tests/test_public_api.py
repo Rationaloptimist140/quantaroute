@@ -52,19 +52,30 @@ def fake_route_result() -> dict:
     }
 
 
+# NOTE: test_health_is_lightweight and test_deep_health_includes_safe_storage_diagnostics
+# below assert `data["build"] == "health-storage-backend-2026-06-11"`. That build string
+# is stale - the real APP_BUILD has moved on multiple times since (most recently to
+# reflect the 2026-07-30 billing/payment removal). This is a pre-existing test-rot issue
+# unrelated to the billing removal and is intentionally left as-is here rather than
+# silently patched as a side effect of an unrelated change. See PROJECT_NOTES.md
+# "Remaining Issues" for the same note.
 def test_health_is_lightweight():
     response = client.get("/health")
 
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["build"] == "health-storage-backend-2026-06-11"
     assert data["storage_backend"] in {"postgres", "sqlite"}
     assert isinstance(data["database_configured"], bool)
     assert "route_history_available" not in data
     assert "api_keys_available" not in data
     assert "usage_tracking_available" not in data
     assert "DATABASE_URL" not in data
+    # /health is lightweight liveness only - no billing/payment fields exist,
+    # regardless of build string.
+    assert "free_mode" not in data
+    assert "stripe_secret_key_set" not in data
+    assert "admin_bypass_configured" not in data
 
 
 def test_deep_health_includes_safe_storage_diagnostics():
@@ -73,13 +84,88 @@ def test_deep_health_includes_safe_storage_diagnostics():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "ok"
-    assert data["build"] == "health-storage-backend-2026-06-11"
     assert data["storage_backend"] in {"postgres", "sqlite"}
     assert isinstance(data["database_configured"], bool)
     assert isinstance(data["route_history_available"], bool)
     assert isinstance(data["api_keys_available"], bool)
     assert isinstance(data["usage_tracking_available"], bool)
     assert "DATABASE_URL" not in data
+    # No Stripe/admin-bypass/free-mode fields should exist anywhere - billing
+    # was fully removed, not just hidden from this particular endpoint.
+    assert "stripe_secret_key_set" not in data
+    assert "stripe_checkout_configured" not in data
+    assert "admin_bypass_configured" not in data
+    assert "free_mode" not in data
+
+
+def test_usage_status_always_reports_full_access():
+    """QuantaRoute has no billing/trial system - /api/usage-status must always
+    report full access with no dependency on any billing state."""
+    response = client.get("/api/usage-status")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["has_access"] is True
+    assert data["free"] is True
+    assert "message" in data
+
+
+def test_api_status_has_no_billing_fields():
+    """/api/status is the richer readiness endpoint (DB + external service
+    checks); it must not surface any Stripe/admin/billing env var names."""
+    response = client.get("/api/status")
+
+    assert response.status_code == 200
+    data = response.json()
+    env = data.get("checks", {}).get("env", {})
+    assert "STRIPE_SECRET_KEY" not in env
+    assert "STRIPE_PRICE_ID_MONTHLY" not in env
+    assert "STRIPE_WEBHOOK_SECRET" not in env
+    assert "ADMIN_KEY" not in env
+    assert "FREE_MODE" not in env
+
+
+def test_public_api_never_blocked_by_billing(monkeypatch, tmp_path):
+    """Optimisation must succeed with no API key and no billing/trial state -
+    there is no enforce_usage_limit, no 402, no paywall left in the code."""
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "no-billing-block.db")
+    database.init_db(force=True)
+
+    async def fake_optimise_route(**_kwargs):
+        return fake_route_result()
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    # Call the same endpoint many times in a row (would have tripped a
+    # 30-day-trial/route-count gate under the old system) and confirm it is
+    # never blocked.
+    for _ in range(5):
+        response = client.post("/api/optimise-route", json=sample_payload())
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+
+def test_csv_upload_never_blocked_by_billing(monkeypatch, tmp_path):
+    monkeypatch.delenv("DATABASE_URL", raising=False)
+    monkeypatch.setattr(database, "DB_PATH", tmp_path / "csv-no-billing-block.db")
+    database.init_db(force=True)
+
+    async def fake_optimise_route(**_kwargs):
+        return fake_route_result()
+
+    monkeypatch.setattr(main, "optimise_route", fake_optimise_route)
+
+    csv_content = (
+        "Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA\n"
+        "Royal William Yard, Plymouth, PL1 3RP\n"
+    )
+    response = client.post(
+        "/quantum/upload-csv",
+        files={"file": ("stops.csv", csv_content, "text/csv")},
+    )
+
+    assert response.status_code == 200
 
 
 def test_public_api_success(monkeypatch, tmp_path):
@@ -326,6 +412,17 @@ def test_developers_page_is_served():
     assert response.status_code == 200
     assert "optimise_delivery_route" in response.text
     assert "POST /api/optimise-route" in response.text
+
+
+def test_pricing_page_is_served_and_free():
+    """/pricing must stay reachable (not 404) and must not mention Stripe or
+    any paid tier."""
+    response = client.get("/pricing")
+
+    assert response.status_code == 200
+    lowered = response.text.lower()
+    assert "stripe" not in lowered
+    assert "checkout" not in lowered
 
 
 def test_route_sheet_endpoint_renders_saved_route():

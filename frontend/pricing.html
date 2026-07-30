@@ -16,7 +16,6 @@
       --text: #0F172A;
       --muted: #64748B;
       --border: #E2E8F0;
-      --highlight: #F0FDF4;
       --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 24px rgba(0,0,0,0.06);
     }
 
@@ -33,7 +32,7 @@
     }
 
     .page {
-      max-width: 1080px;
+      max-width: 720px;
       margin: 0 auto;
       padding: 32px 16px;
     }
@@ -54,22 +53,12 @@
       text-transform: uppercase;
     }
 
-    h1,
-    h2,
-    h3 {
+    h1 {
       margin: 0;
       color: var(--text);
       font-weight: 700;
-    }
-
-    h1 {
-      font-size: clamp(2.25rem, 8vw, 4.25rem);
+      font-size: clamp(2.25rem, 8vw, 3.5rem);
       line-height: 1;
-    }
-
-    h2 {
-      font-size: clamp(1.5rem, 5vw, 2.25rem);
-      line-height: 1.1;
     }
 
     p {
@@ -82,62 +71,33 @@
       color: var(--muted);
     }
 
-    .pricing-grid {
+    .card {
       display: grid;
-      gap: 24px;
-      margin-bottom: 32px;
-    }
-
-    .pricing-card {
-      display: grid;
-      gap: 20px;
+      gap: 18px;
       padding: 32px;
       border: 1px solid var(--border);
       border-radius: 16px;
       background: var(--card);
       box-shadow: var(--shadow);
-    }
-
-    .pricing-card.featured {
-      border: 2px solid var(--accent);
-    }
-
-    .badge {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 10px;
-      border-radius: 999px;
-      background: var(--highlight);
-      color: var(--accent);
-      font-size: 12px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      width: fit-content;
+      text-align: center;
     }
 
     .price {
       color: var(--success);
-      font-size: clamp(2rem, 4vw, 3rem);
+      font-size: clamp(2.5rem, 6vw, 3.5rem);
       font-weight: 700;
       letter-spacing: -0.02em;
       line-height: 1;
     }
 
-    .price small {
-      color: var(--muted);
-      font-size: 1rem;
-      font-weight: 500;
-      letter-spacing: 0;
-    }
-
     .feature-list {
       display: grid;
       gap: 12px;
-      margin: 0;
+      margin: 0 auto;
       padding: 0;
       list-style: none;
+      max-width: 420px;
+      text-align: left;
     }
 
     .feature-list li {
@@ -171,197 +131,28 @@
     .button:hover {
       background: var(--accent-hover);
     }
-
-    .button.secondary {
-      background: #FFFFFF;
-      color: var(--accent);
-      border: 1px solid var(--accent);
-    }
-
-    .button.secondary:hover {
-      background: var(--highlight);
-    }
-
-    .comparison-card {
-      padding: 32px;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: var(--card);
-      box-shadow: var(--shadow);
-    }
-
-    .table-wrap {
-      margin-top: 20px;
-      overflow-x: auto;
-      border: 1px solid var(--border);
-      border-radius: 16px;
-      background: #FFFFFF;
-    }
-
-    table {
-      width: 100%;
-      min-width: 680px;
-      border-collapse: collapse;
-      color: var(--text);
-    }
-
-    thead tr {
-      background: var(--highlight);
-    }
-
-    th {
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    th,
-    td {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      text-align: center;
-      vertical-align: middle;
-    }
-
-    th:first-child,
-    td:first-child {
-      color: var(--muted);
-      font-weight: 500;
-      text-align: left;
-    }
-
-    tbody tr:last-child td {
-      border-bottom: 0;
-    }
-
-    .q-col {
-      background: var(--highlight);
-      color: var(--accent);
-      font-weight: 700;
-    }
-
-    .note {
-      margin-top: 18px;
-      color: var(--muted);
-      font-size: 0.95rem;
-    }
-
-    @media (min-width: 780px) {
-      .pricing-grid {
-        grid-template-columns: repeat(3, 1fr);
-      }
-
-      .pricing-card.featured {
-        transform: translateY(-6px);
-      }
-    }
   </style>
 </head>
 <body>
   <main class="page">
     <section class="hero">
-      <p class="eyebrow">Simple courier pricing</p>
-      <h1>Simple pricing for smarter delivery routes.</h1>
-      <p class="muted">Built for drivers and small fleets who want smarter routes, visible fuel savings, and no expensive monthly software.</p>
+      <p class="eyebrow">Pricing</p>
+      <h1>QuantaRoute is free.</h1>
+      <p class="muted">No account, no trial, no card required. Just paste your addresses and go.</p>
     </section>
 
-    <section class="pricing-grid" aria-label="QuantaRoute pricing options">
-      <article class="pricing-card featured">
-        <div>
-          <h2>First Month</h2>
-          <p class="muted">Test road-based route optimisation and fuel-saving stop reordering before paying.</p>
-        </div>
-        <div class="price">Free <small>/ unlimited routes</small></div>
-        <ul class="feature-list">
-          <li>Unlimited smart route optimisations</li>
-          <li>Real road-network distances</li>
-          <li>Fuel saving percentage shown every time</li>
-          <li>Google Maps and WhatsApp links included</li>
-        </ul>
-        <a class="button" href="/">Start Optimising</a>
-      </article>
-
-      <article class="pricing-card">
-        <div>
-          <h2>Pay As You Go</h2>
-          <p class="muted">A simple price for active delivery days, with no monthly software commitment.</p>
-        </div>
-        <div class="price">£1.99 <small>/ optimised route</small></div>
-        <ul class="feature-list">
-          <li>No monthly fee</li>
-          <li>No subscription lock-in</li>
-          <li>Pay only when you use it</li>
-          <li>Cancel anytime</li>
-        </ul>
-        <a class="button" href="/">Optimise a Route</a>
-      </article>
-
-      <article class="pricing-card">
-        <div>
-          <span class="badge">New</span>
-          <h2>Monthly Plan</h2>
-          <p class="muted">For regular couriers who run routes most days and want a predictable monthly cost.</p>
-        </div>
-        <div class="price">£1.99 <small>/ month, up to 100 routes</small></div>
-        <ul class="feature-list">
-          <li>Up to 100 optimised routes per month</li>
-          <li>Delivered as an API key, ready to use straight after checkout</li>
-          <li>Everything in Pay As You Go</li>
-          <li>Cancel anytime</li>
-        </ul>
-        <a class="button secondary" href="/subscribe/monthly">Get the Monthly Plan</a>
-      </article>
-    </section>
-
-    <section class="comparison-card" aria-label="Competitor comparison">
-      <h2>QuantaRoute vs traditional route planners</h2>
-      <p class="muted">Built for quick browser-based UK courier routing without monthly software overhead.</p>
-
-      <div class="table-wrap">
-        <table>
-          <thead>
-            <tr>
-              <th scope="col"></th>
-              <th scope="col" class="q-col">QuantaRoute</th>
-              <th scope="col">Routific</th>
-              <th scope="col">OptimoRoute</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td>Price</td>
-              <td class="q-col">£1.99/route or £1.99/mo (100 routes)</td>
-              <td>£150+/month</td>
-              <td>£39+/driver/month</td>
-            </tr>
-            <tr>
-              <td>App required</td>
-              <td class="q-col">No</td>
-              <td>Yes</td>
-              <td>Yes</td>
-            </tr>
-            <tr>
-              <td>Road-based route optimisation</td>
-              <td class="q-col">Yes</td>
-              <td>No</td>
-              <td>No</td>
-            </tr>
-            <tr>
-              <td>Fuel saving shown</td>
-              <td class="q-col">Yes</td>
-              <td>No</td>
-              <td>No</td>
-            </tr>
-            <tr>
-              <td>Free trial</td>
-              <td class="q-col">1 month free</td>
-              <td>Limited</td>
-              <td>Limited</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <p class="note">Currently in beta: QuantaRoute is free to test during the beta period. The Monthly Plan checkout above is live via Stripe. After launch, pricing will be £1.99 per optimised route, or £1.99/month for up to 100 routes.</p>
+    <section class="card" aria-label="QuantaRoute pricing">
+      <div class="price">£0</div>
+      <p><strong>Free for everyone, no limits.</strong></p>
+      <ul class="feature-list">
+        <li>Unlimited route optimisations</li>
+        <li>Real road-network distances</li>
+        <li>Fuel saving percentage shown every time</li>
+        <li>Google Maps and WhatsApp links included</li>
+        <li>CSV upload support</li>
+        <li>No account or sign-up required</li>
+      </ul>
+      <a class="button" href="/">Start Optimising</a>
     </section>
   </main>
 </body>

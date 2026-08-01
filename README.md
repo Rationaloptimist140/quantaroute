@@ -25,6 +25,45 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 - CSV upload or pasted stops
 - Mobile-friendly browser app
 
+## CSV Upload Formats
+
+Uploading a CSV in the web app sends the file to `POST /quantum/upload-csv`,
+which parses and optimises it in one step. Two formats are supported,
+detected from the header row (not by guessing at row values):
+
+**Recommended: `Postcode,Number`**
+
+```csv
+Postcode,Number
+WC1X 0GB,1
+SE1 9JE,3
+```
+
+- `Postcode` becomes the delivery address.
+- `Number` is a stop count/weight for that stop (currently captured and
+  validated, not yet used by the routing algorithm itself). Blank or
+  non-numeric values default to `1`.
+
+**Also supported: `Property Name,Address,Postcode,Type`**
+
+```csv
+Property Name,Address,Postcode,Type
+Old School Building,1 Naoroji Street Clerkenwell,WC1X 0GB,Office
+Riverside House,22 Bankside,SE1 9JE,Retail
+```
+
+- `Property Name` and `Type` are ignored for routing.
+- The delivery address is built from `Address` + `Postcode`.
+
+Both formats are normalised internally into the same shape (`address`,
+`stop_count`) before routing. If your CSV's headers don't match either
+format exactly, QuantaRoute falls back to its original, more flexible
+parser (a plain list of addresses with no header row, or a loosely-shaped
+multi-column export) — existing CSVs that already work will keep working.
+A clear error is only shown if the file can't be read as either the two
+standard formats or the legacy fallback. Example files: `examples/csv-format-postcode-number.csv`,
+`examples/csv-format-property.csv`.
+
 ## Public API
 
 POST `/api/optimise-route`

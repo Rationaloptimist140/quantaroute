@@ -13,7 +13,7 @@ from typing import Literal
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
-from fastapi import FastAPI, Header, HTTPException, Request, UploadFile, File
+from fastapi import FastAPI, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -54,6 +54,10 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    # Exposes the CSV-format-detection header to frontend JS across origins
+    # (the site can be loaded from a custom domain while calling the API on
+    # a different one) - purely additive, no other CORS behaviour changes.
+    expose_headers=["X-CSV-Format-Detected"],
 )
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -327,32 +331,65 @@ def parse_csv_addresses(decoded_csv: str) -> list[str]:
 
 # --- Standard CSV upload formats -----------------------------------------
 #
-# Two documented CSV formats are supported, detected by exact header match
-# (not by guessing at row values):
+# Three documented CSV formats are supported, tried in this order:
 #
-#   Format B (recommended, the public standard): Postcode,Number
-#     - Postcode becomes the address, Number becomes stop_count.
-#   Format A (richer property format): Property Name,Address,Postcode,Type
-#     - Property Name and Type are ignored for routing; address is built
-#       from Address + Postcode; stop_count defaults to 1.
+#   1. Header-based exact match (checked first, never guessed from values):
+#      Format B (recommended, the public standard): Postcode,Number
+#        - Postcode becomes the address, Number becomes stop_count.
+#      Format A (richer property format): Property Name,Address,Postcode,Type
+#        - Property Name and Type are ignored for routing; address is built
+#          from Address + Postcode; stop_count defaults to 1.
+#   2. Format C - headerless two-column compatibility format (checked second,
+#      only once no header row was recognised at all): every non-empty row
+#      has exactly two columns, e.g. "WC1X 0GB,1". Column 1 is taken directly
+#      as the address/postcode and column 2 as stop_count, with no ignore-cell
+#      heuristics applied - this format exists precisely so a bare postcode
+#      (which the legacy parser below would otherwise discard) is still
+#      treated as a real address.
+#   3. The legacy parser (checked last, unchanged): the older, more flexible
+#      multi-column business/address/postcode shape, or a plain list of
+#      addresses with no header and no fixed column count.
 #
-# Both are normalised into one internal shape: {"address": str, "stop_count": int}.
+# All three are normalised into one internal shape: {"address": str, "stop_count": int}.
 # stop_count is captured/validated here but not threaded further into the
 # routing pipeline, database, or response yet - only "address" is passed on.
 #
-# Any CSV that doesn't match either format's headers exactly falls back to
-# the legacy parser above unchanged, so existing uploads (headerless address
-# lists, the older multi-column business/address/postcode shape, etc.) keep
-# working exactly as before. A validation error is only returned if neither
-# the new formats nor the legacy fallback can extract at least 2 stops.
+# A validation error is only returned if none of the three paths can extract
+# at least 2 stops.
 CSV_FORMAT_A_HEADERS = {"property name", "address", "postcode", "type"}
 CSV_FORMAT_B_HEADERS = {"postcode", "number"}
 
-CSV_FORMAT_HELP_MESSAGE = (
-    "Could not read at least 2 delivery stops from this CSV. Supported formats: "
-    "'Postcode,Number' (recommended), or the richer 'Property Name,Address,Postcode,Type'. "
-    "A simple list of addresses with no header row also works."
+CSV_ACCEPTED_FORMATS_TEXT = (
+    "Accepted formats: 'Postcode,Number' (recommended), a headerless "
+    "two-column file with a postcode and a number on each line (e.g. "
+    "'WC1X 0GB,1'), or the richer 'Property Name,Address,Postcode,Type'."
 )
+
+CSV_FORMAT_LABELS = {
+    "A": "property",
+    "B": "postcode_number",
+    "C": "headerless_postcode_number",
+}
+
+
+def csv_upload_error_message(decoded_csv: str, addresses: list[str]) -> str:
+    """Build a specific, actionable error for a CSV that didn't yield at
+    least 2 usable delivery stops - distinguishing an empty file, a file
+    where nothing could be recognised at all, and a file that was almost
+    right but only produced a single stop."""
+    if not decoded_csv.strip():
+        return f"This CSV file appears to be empty. {CSV_ACCEPTED_FORMATS_TEXT}"
+
+    if len(addresses) == 0:
+        return (
+            "Could not find any valid delivery stops in this CSV - check that "
+            f"your header row matches one of the accepted formats exactly. {CSV_ACCEPTED_FORMATS_TEXT}"
+        )
+
+    return (
+        f"Only found {len(addresses)} valid delivery stop in this CSV, but at "
+        f"least 2 are needed to optimise a route. {CSV_ACCEPTED_FORMATS_TEXT}"
+    )
 
 
 def detect_csv_format(header_row: list[str]) -> str | None:
@@ -412,18 +449,69 @@ def normalise_standard_csv_rows(rows: list[list[str]], csv_format: str) -> list[
     return normalised
 
 
+def is_headerless_two_column_csv(rows: list[list[str]]) -> bool:
+    """True when every non-empty row has exactly two columns and the first
+    row isn't a recognised header (Format A/B, or the legacy header word
+    list). This is the signal for the headerless compatibility format -
+    e.g. "WC1X 0GB,1" with no header row at all."""
+    if not rows:
+        return False
+
+    first_row_cells = [clean_route_address(cell) for cell in rows[0]]
+    if detect_csv_format(rows[0]) or is_csv_header_row(first_row_cells):
+        return False
+
+    non_empty_rows = [row for row in rows if any(clean_route_address(cell) for cell in row)]
+    if not non_empty_rows:
+        return False
+
+    return all(len(row) == 2 for row in non_empty_rows)
+
+
+def normalise_headerless_two_column_rows(rows: list[list[str]]) -> list[dict]:
+    """Normalise Format C: column 1 is the address/postcode taken as-is
+    (never run through is_ignored_csv_cell/is_postcode_only), column 2 is
+    stop_count."""
+    normalised: list[dict] = []
+    for row in rows:
+        if not any(clean_route_address(cell) for cell in row):
+            continue
+        address = clean_route_address(row[0])
+        if not address:
+            continue
+        stop_count = parse_stop_count(row[1] if len(row) > 1 else "")
+        normalised.append({"address": address, "stop_count": stop_count})
+    return normalised
+
+
+def classify_csv_format(rows: list[list[str]]) -> str | None:
+    """Returns "A", "B", "C" (headerless two-column compatibility format),
+    or None (legacy fallback should be used)."""
+    if not rows:
+        return None
+    csv_format = detect_csv_format(rows[0])
+    if csv_format:
+        return csv_format
+    if is_headerless_two_column_csv(rows):
+        return "C"
+    return None
+
+
 def parse_csv_rows_normalised(decoded_csv: str) -> list[dict]:
     """Parse a CSV into the standard internal shape: a list of
-    {"address": str, "stop_count": int} rows. Tries the two documented
-    formats first (exact header match), then falls back to the legacy
-    parser so existing uploads keep working."""
+    {"address": str, "stop_count": int} rows. Tries the two header-based
+    formats first (exact header match), then the headerless two-column
+    compatibility format, then falls back to the legacy parser so older
+    uploads keep working."""
     rows = list(csv.reader(io.StringIO(decoded_csv)))
     if not rows:
         return []
 
-    csv_format = detect_csv_format(rows[0])
-    if csv_format:
+    csv_format = classify_csv_format(rows)
+    if csv_format in ("A", "B"):
         return normalise_standard_csv_rows(rows, csv_format)
+    if csv_format == "C":
+        return normalise_headerless_two_column_rows(rows)
 
     legacy_addresses = parse_csv_addresses(decoded_csv)
     return [{"address": address, "stop_count": 1} for address in legacy_addresses]
@@ -887,23 +975,45 @@ def pricing_page():
 @app.post("/quantum/upload-csv", response_model=RouteResponse)
 async def upload_csv(
     request: Request,
+    response: Response,
     file: UploadFile = File(...),
     driver_name: str = "Driver",
     start_address: str | None = None,
     return_to_start: bool = False,
 ):
     if not file.filename.lower().endswith(".csv"):
-        raise HTTPException(status_code=400, detail="File must be a .csv")
+        raise HTTPException(
+            status_code=400,
+            detail=f"'{file.filename}' isn't a .csv file. Please upload a .csv file.",
+        )
     contents = await file.read()
     decoded = contents.decode("utf-8-sig")
+
+    detected_rows = list(csv.reader(io.StringIO(decoded)))
+    detected_format = classify_csv_format(detected_rows)
+    # Reported via a response header (not the response body/schema) so this
+    # is purely additive - it doesn't touch RouteResponse or the routing
+    # pipeline at all.
+    response.headers["X-CSV-Format-Detected"] = CSV_FORMAT_LABELS.get(detected_format, "legacy")
+
     normalised_rows = parse_csv_rows_normalised(decoded)
     # stop_count is captured/validated by parse_csv_rows_normalised but not
     # threaded into the routing pipeline yet - only address is used below.
     addresses = [row["address"] for row in normalised_rows if row.get("address")]
     if len(addresses) < 2:
-        raise HTTPException(status_code=400, detail=CSV_FORMAT_HELP_MESSAGE)
+        raise HTTPException(
+            status_code=400,
+            detail=csv_upload_error_message(decoded, addresses),
+        )
     if len(addresses) > 50:
-        raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"This CSV has {len(addresses)} stops, which is over the current "
+                "limit of 50 per upload. Split it into smaller files and upload "
+                "them separately."
+            ),
+        )
     try:
         result = await optimise_route(
             addresses=addresses,

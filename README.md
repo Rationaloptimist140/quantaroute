@@ -28,10 +28,10 @@ QuantaRoute helps UK couriers and small delivery operators reduce wasted miles b
 ## CSV Upload Formats
 
 Uploading a CSV in the web app sends the file to `POST /quantum/upload-csv`,
-which parses and optimises it in one step. Two formats are supported,
-detected from the header row (not by guessing at row values):
+which parses and optimises it in one step. Three formats are supported, in
+this detection order:
 
-**Recommended: `Postcode,Number`**
+**1. Recommended standard: `Postcode,Number`** (detected from the header row)
 
 ```csv
 Postcode,Number
@@ -44,7 +44,24 @@ SE1 9JE,3
   validated, not yet used by the routing algorithm itself). Blank or
   non-numeric values default to `1`.
 
-**Also supported: `Property Name,Address,Postcode,Type`**
+**2. Headerless compatibility format: `WC1X 0GB,1`** (no header row)
+
+```csv
+WC1X 0GB,1
+EC3M 1EB,20
+EC2A 2EG,12
+```
+
+- Detected when there's no recognised header row and every non-empty row
+  has exactly two columns.
+- Column 1 is taken directly as the address/postcode, column 2 as the stop
+  count/weight (same defaulting rule as above).
+- This exists specifically so a bare postcode with nothing else on the line
+  is treated as a real address, rather than being discarded by the more
+  cautious legacy parser below.
+
+**3. Rich property format: `Property Name,Address,Postcode,Type`** (detected
+from the header row)
 
 ```csv
 Property Name,Address,Postcode,Type
@@ -55,14 +72,26 @@ Riverside House,22 Bankside,SE1 9JE,Retail
 - `Property Name` and `Type` are ignored for routing.
 - The delivery address is built from `Address` + `Postcode`.
 
-Both formats are normalised internally into the same shape (`address`,
-`stop_count`) before routing. If your CSV's headers don't match either
-format exactly, QuantaRoute falls back to its original, more flexible
-parser (a plain list of addresses with no header row, or a loosely-shaped
-multi-column export) — existing CSVs that already work will keep working.
-A clear error is only shown if the file can't be read as either the two
-standard formats or the legacy fallback. Example files: `examples/csv-format-postcode-number.csv`,
-`examples/csv-format-property.csv`.
+All three are normalised internally into the same shape (`address`,
+`stop_count`) before routing. If a CSV matches none of the three — its
+header doesn't match either standard format, and its rows aren't a clean
+two-column shape — QuantaRoute falls back to its original, more flexible
+legacy parser (a loosely-shaped multi-column export, or any other
+addresses-with-no-fixed-column-count file) — existing older CSVs keep
+working. A clear error is only shown if the file can't be read via any of
+the three formats or the legacy fallback — the message names which formats
+are accepted and, where possible, what specifically was wrong (empty file,
+no recognisable stops, or only one stop found when at least two are
+needed).
+
+The web app's upload section has **"Download postcode template"** and
+**"Download property template"** buttons that download ready-made example
+files for each format directly (served from `frontend/assets/`). The same
+content also lives in `examples/csv-format-postcode-number.csv` and
+`examples/csv-format-property.csv` for repo/documentation reference.
+
+On successful upload, the app also shows a subtle note confirming which
+format was detected (e.g. "uploaded (Postcode,Number format detected)").
 
 ## Public API
 

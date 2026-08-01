@@ -206,6 +206,62 @@
       overflow-wrap: anywhere;
     }
 
+    .csv-format-hint {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #F7F8FA;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      color: var(--muted);
+    }
+
+    .csv-format-hint strong {
+      color: var(--text);
+    }
+
+    .csv-format-hint code {
+      padding: 1px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #FFFFFF;
+      color: var(--accent);
+      font-weight: 700;
+      font-size: 0.82rem;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .csv-templates {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0;
+    }
+
+    .template-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #FFFFFF;
+      color: var(--accent);
+      font-size: 0.84rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: border 180ms ease, background 180ms ease;
+    }
+
+    .template-link:hover {
+      border-color: var(--accent);
+      background: #F0FDF4;
+    }
+
     .primary {
       width: 100%;
       min-height: 60px;
@@ -768,7 +824,19 @@
               📎 Upload CSV
               <input id="csvFile" type="file" accept=".csv,text/csv" />
             </label>
-            <p class="file-status" id="fileStatus">Recommended CSV format: Postcode,Number. Also supports Property Name,Address,Postcode,Type. Or paste addresses above, one per line.</p>
+
+            <div class="csv-format-hint">
+              <p><strong>Recommended:</strong> <code>Postcode,Number</code></p>
+              <p><strong>Also supported:</strong> headerless postcode/number rows, e.g. <code>WC1X 0GB,1</code></p>
+              <p><strong>Also supported:</strong> <code>Property Name,Address,Postcode,Type</code></p>
+            </div>
+
+            <div class="csv-templates">
+              <a class="template-link" href="/assets/csv-format-postcode-number.csv" download="quantaroute-postcode-template.csv">⬇ Download postcode template</a>
+              <a class="template-link" href="/assets/csv-format-property.csv" download="quantaroute-property-template.csv">⬇ Download property template</a>
+            </div>
+
+            <p class="file-status" id="fileStatus">Upload a CSV using any of the formats above, or paste addresses to the left.</p>
           </div>
 
           <button class="primary" id="submitButton" type="submit">Optimise Route</button>
@@ -905,7 +973,15 @@
     // CSV parsing now happens once, on the backend, via POST /quantum/upload-csv.
     // This keeps QuantaRoute to a single standard CSV format/normalisation path
     // instead of a second, separate JS parser that could drift out of sync with it.
-    const DEFAULT_FILE_STATUS_TEXT = "Recommended CSV format: Postcode,Number. Also supports Property Name,Address,Postcode,Type. Or paste addresses above, one per line.";
+    const DEFAULT_FILE_STATUS_TEXT = "Upload a CSV using any of the formats above, or paste addresses to the left.";
+
+    const CSV_FORMAT_DETECTED_LABELS = {
+      postcode_number: "Postcode,Number format detected",
+      headerless_postcode_number: "Headerless postcode/number format detected",
+      property: "Property template format detected"
+      // "legacy" is intentionally unlabelled below - it's not one of the
+      // named formats, so a generic confirmation is clearer than a made-up name.
+    };
 
     function parseTextarea() {
       return addresses.value
@@ -1144,7 +1220,11 @@
           throw new Error(formatApiError(data));
         }
 
-        fileStatus.textContent = `${file.name} uploaded — route optimised below.`;
+        const detectedFormat = response.headers.get("X-CSV-Format-Detected");
+        const formatNote = CSV_FORMAT_DETECTED_LABELS[detectedFormat];
+        fileStatus.textContent = formatNote
+          ? `${file.name} uploaded (${formatNote}) — route optimised below.`
+          : `${file.name} uploaded — route optimised below.`;
         renderResults(data);
         fetchHistory();
       } catch (error) {

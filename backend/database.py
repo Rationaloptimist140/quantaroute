@@ -29,6 +29,7 @@ _SCHEMA_READY_FOR: str | None = None
 ROUTE_HISTORY_TABLE = "quantaroute_route_history"
 API_KEYS_TABLE = "quantaroute_api_keys"
 USAGE_EVENTS_TABLE = "quantaroute_usage_events"
+ANALYTICS_EVENTS_TABLE = "quantaroute_analytics_events"
 
 
 ROUTE_SELECT_COLUMNS = """
@@ -173,6 +174,32 @@ POSTGRES_USAGE_EVENT_COLUMNS = [
 ]
 
 
+# quantaroute_analytics_events backs the private /admin/metrics dashboard.
+# It intentionally has no column capable of holding a raw address, CSV
+# content, name, email, phone number, or exact IP address - see
+# backend/main.py's record_analytics()/anonymous_session_id() and
+# PROJECT_NOTES.md for what is captured and why. anonymous_id is a one-way
+# hash (IP + user agent + calendar day), never the raw IP itself.
+SQLITE_ANALYTICS_EVENT_COLUMNS = [
+    ("input_method", "TEXT"),
+    ("csv_format", "TEXT"),
+    ("stop_count", "INTEGER"),
+    ("duration_ms", "INTEGER"),
+    ("error_category", "TEXT"),
+    ("app_build", "TEXT"),
+]
+
+
+POSTGRES_ANALYTICS_EVENT_COLUMNS = [
+    ("input_method", "TEXT"),
+    ("csv_format", "TEXT"),
+    ("stop_count", "INTEGER"),
+    ("duration_ms", "INTEGER"),
+    ("error_category", "TEXT"),
+    ("app_build", "TEXT"),
+]
+
+
 def get_database_url() -> str:
     return os.getenv("DATABASE_URL", "").strip()
 
@@ -310,6 +337,26 @@ def init_sqlite() -> None:
         )
         for column_name, column_definition in SQLITE_API_KEY_COLUMNS:
             ensure_sqlite_column(conn, API_KEYS_TABLE, column_name, column_definition)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quantaroute_analytics_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                event_name TEXT NOT NULL,
+                occurred_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                anonymous_id TEXT
+            )
+            """
+        )
+        for column_name, column_definition in SQLITE_ANALYTICS_EVENT_COLUMNS:
+            ensure_sqlite_column(conn, ANALYTICS_EVENTS_TABLE, column_name, column_definition)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quantaroute_analytics_events_occurred_at "
+            "ON quantaroute_analytics_events (occurred_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quantaroute_analytics_events_event_name "
+            "ON quantaroute_analytics_events (event_name)"
+        )
         conn.commit()
 
 
@@ -369,6 +416,26 @@ def init_postgres() -> None:
         )
         for column_name, column_definition in POSTGRES_API_KEY_COLUMNS:
             ensure_postgres_column(conn, API_KEYS_TABLE, column_name, column_definition)
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS quantaroute_analytics_events (
+                id BIGSERIAL PRIMARY KEY,
+                event_name TEXT NOT NULL,
+                occurred_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+                anonymous_id TEXT
+            )
+            """
+        )
+        for column_name, column_definition in POSTGRES_ANALYTICS_EVENT_COLUMNS:
+            ensure_postgres_column(conn, ANALYTICS_EVENTS_TABLE, column_name, column_definition)
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quantaroute_analytics_events_occurred_at "
+            "ON quantaroute_analytics_events (occurred_at)"
+        )
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_quantaroute_analytics_events_event_name "
+            "ON quantaroute_analytics_events (event_name)"
+        )
 
 
 def init_db(force: bool = False) -> None:
@@ -947,6 +1014,203 @@ def api_keys_available() -> bool:
 
 def usage_tracking_available() -> bool:
     return table_available(USAGE_EVENTS_TABLE)
+
+
+def record_analytics_event(
+    event_name: str,
+    *,
+    anonymous_id: str | None = None,
+    input_method: str | None = None,
+    csv_format: str | None = None,
+    stop_count: int | None = None,
+    duration_ms: int | None = None,
+    error_category: str | None = None,
+    app_build: str | None = None,
+) -> int:
+    """Record one anonymised product-analytics event for the private
+    /admin/metrics dashboard. Never stores raw addresses, CSV contents,
+    names, emails, phone numbers, or exact IP addresses - see
+    PROJECT_NOTES.md and backend/main.py's record_analytics()/
+    anonymous_session_id() for what is captured and how."""
+    init_db()
+    created_at = datetime.now(UTC).isoformat()
+    record = {
+        "event_name": str(event_name),
+        "occurred_at": created_at,
+        "anonymous_id": anonymous_id,
+        "input_method": input_method,
+        "csv_format": csv_format,
+        "stop_count": int_or_none(stop_count),
+        "duration_ms": int_or_none(duration_ms),
+        "error_category": error_category,
+        "app_build": app_build,
+    }
+    columns = list(record)
+    values = [record[column] for column in columns]
+
+    if using_postgres():
+        placeholders = ", ".join(["%s"] * len(columns))
+        with get_postgres_connection() as conn:
+            row = conn.execute(
+                f"""
+                INSERT INTO {ANALYTICS_EVENTS_TABLE} ({", ".join(columns)})
+                VALUES ({placeholders})
+                RETURNING id
+                """,
+                values,
+            ).fetchone()
+        return int(row["id"])
+
+    placeholders = ", ".join(["?"] * len(columns))
+    with get_sqlite_connection() as conn:
+        cursor = conn.execute(
+            f"""
+            INSERT INTO {ANALYTICS_EVENTS_TABLE} ({", ".join(columns)})
+            VALUES ({placeholders})
+            """,
+            values,
+        )
+        conn.commit()
+        return int(cursor.lastrowid)
+
+
+def get_analytics_events_since(
+    since: datetime | None = None,
+    limit: int | None = None,
+) -> list[dict[str, Any]]:
+    """Fetch analytics events at/after `since` (all rows when None), newest
+    first. Every column on this table is already anonymised/aggregate-safe
+    by construction - there is no raw address or CSV content column here at
+    all, so this is always safe to expose on the admin dashboard or export."""
+    init_db()
+    limit_sql_pg = " LIMIT %s" if limit is not None else ""
+    limit_sql_sqlite = " LIMIT ?" if limit is not None else ""
+    select_columns = (
+        "id, event_name, occurred_at, anonymous_id, input_method, "
+        "csv_format, stop_count, duration_ms, error_category, app_build"
+    )
+
+    if using_postgres():
+        with get_postgres_connection() as conn:
+            if since is not None:
+                params: tuple = (since,) + ((limit,) if limit is not None else ())
+                rows = conn.execute(
+                    f"""
+                    SELECT {select_columns}
+                    FROM {ANALYTICS_EVENTS_TABLE}
+                    WHERE occurred_at >= %s
+                    ORDER BY occurred_at DESC, id DESC
+                    {limit_sql_pg}
+                    """,
+                    params,
+                ).fetchall()
+            else:
+                params = (limit,) if limit is not None else ()
+                rows = conn.execute(
+                    f"""
+                    SELECT {select_columns}
+                    FROM {ANALYTICS_EVENTS_TABLE}
+                    ORDER BY occurred_at DESC, id DESC
+                    {limit_sql_pg}
+                    """,
+                    params,
+                ).fetchall()
+    else:
+        with get_sqlite_connection() as conn:
+            if since is not None:
+                params = (since.isoformat(),) + ((limit,) if limit is not None else ())
+                rows = conn.execute(
+                    f"""
+                    SELECT {select_columns}
+                    FROM {ANALYTICS_EVENTS_TABLE}
+                    WHERE occurred_at >= ?
+                    ORDER BY occurred_at DESC, id DESC
+                    {limit_sql_sqlite}
+                    """,
+                    params,
+                ).fetchall()
+            else:
+                params = (limit,) if limit is not None else ()
+                rows = conn.execute(
+                    f"""
+                    SELECT {select_columns}
+                    FROM {ANALYTICS_EVENTS_TABLE}
+                    ORDER BY occurred_at DESC, id DESC
+                    {limit_sql_sqlite}
+                    """,
+                    params,
+                ).fetchall()
+
+    return [dict(row) for row in rows]
+
+
+def get_analytics_summary(since: datetime | None = None) -> dict[str, Any]:
+    """Aggregate analytics events into the /admin/metrics summary shape.
+    Aggregation is done in Python (not SQL GROUP BY/aggregate functions) to
+    keep this portable across SQLite/Postgres without dialect-specific SQL -
+    that's a fine trade-off at the event volumes this table is expected to
+    see for a single-operator product; revisit with real SQL aggregates if
+    event volume ever grows large enough for this to matter."""
+    events = get_analytics_events_since(since)
+
+    def count(event_name: str) -> int:
+        return sum(1 for event in events if event.get("event_name") == event_name)
+
+    routes_started = count("route_started")
+    routes_completed = count("route_completed")
+    routes_failed = count("route_failed")
+    geocoding_failures = count("geocoding_failed")
+    routing_failures = count("routing_failed")
+    feedback_submitted = count("feedback_submitted")
+
+    completed_events = [e for e in events if e.get("event_name") == "route_completed"]
+    stop_counts = [e["stop_count"] for e in completed_events if e.get("stop_count") is not None]
+    durations = [e["duration_ms"] for e in completed_events if e.get("duration_ms") is not None]
+    avg_stops = round(sum(stop_counts) / len(stop_counts), 1) if stop_counts else None
+    avg_duration_ms = round(sum(durations) / len(durations)) if durations else None
+
+    success_rate_percent = (
+        round((routes_completed / routes_started) * 100, 1) if routes_started else None
+    )
+
+    input_events = [e for e in events if e.get("event_name") == "input_submitted"]
+    by_input_method: dict[str, int] = {}
+    for event in input_events:
+        key = event.get("input_method") or "unknown"
+        by_input_method[key] = by_input_method.get(key, 0) + 1
+
+    csv_events = [e for e in input_events if e.get("input_method") in ("csv_upload", "csv_paste")]
+    by_csv_format: dict[str, int] = {}
+    for event in csv_events:
+        key = event.get("csv_format") or "unknown"
+        by_csv_format[key] = by_csv_format.get(key, 0) + 1
+
+    completed_by_anon: dict[str, int] = {}
+    for event in completed_events:
+        anon_id = event.get("anonymous_id")
+        if anon_id:
+            completed_by_anon[anon_id] = completed_by_anon.get(anon_id, 0) + 1
+    repeat_anonymous_users = sum(1 for total in completed_by_anon.values() if total > 1)
+
+    return {
+        "routes_started": routes_started,
+        "routes_completed": routes_completed,
+        "route_success_rate_percent": success_rate_percent,
+        "avg_stops_per_completed_route": avg_stops,
+        "avg_duration_ms": avg_duration_ms,
+        "routes_failed": routes_failed,
+        "geocoding_failures": geocoding_failures,
+        "routing_failures": routing_failures,
+        "feedback_submitted": feedback_submitted,
+        "submissions_by_input_method": by_input_method,
+        "csv_submissions_by_format": by_csv_format,
+        "repeat_anonymous_users": repeat_anonymous_users,
+        "total_events": len(events),
+    }
+
+
+def analytics_events_available() -> bool:
+    return table_available(ANALYTICS_EVENTS_TABLE)
 
 
 def parse_timestamp(value: Any) -> datetime:

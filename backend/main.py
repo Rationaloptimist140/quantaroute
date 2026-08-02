@@ -7,17 +7,22 @@ import os
 import csv
 import io
 import re
+import time
+import secrets
+import hashlib
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Literal
 
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'services'))
 
-from fastapi import FastAPI, Header, HTTPException, Request, Response, UploadFile, File
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, UploadFile, File
 from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, PlainTextResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 import logging
@@ -31,6 +36,7 @@ from services.route_builder import (
     optimise_route,
 )
 from services.route_sheet import build_route_sheet_html
+from services.admin_dashboard import build_admin_metrics_html
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -69,10 +75,13 @@ if ASSETS_DIR.exists():
 
 from database import (
     api_keys_available,
+    get_analytics_events_since,
+    get_analytics_summary,
     get_database_url,
     get_recent_routes,
     get_route_by_id,
     init_db,
+    record_analytics_event,
     record_usage_event,
     save_route,
     usage_tracking_available,
@@ -167,6 +176,123 @@ def record_route_history(
     except Exception as e:
         logger.error(f"Failed to save route history: {e}")
         return None
+
+
+# --- Private product-analytics dashboard (GET /admin/metrics) ------------
+#
+# There is no admin/owner authentication left in this codebase - the
+# ADMIN_KEY/ADMIN_BYPASS_IPS mechanism was fully removed on 2026-07-30 along
+# with the billing/trial system it existed to bypass (see PROJECT_NOTES.md).
+# This is a brand-new, separate, minimal auth gate for this dashboard only -
+# it does not resurrect or reuse anything from the removed billing system.
+#
+# ADMIN_METRICS_USER / ADMIN_METRICS_PASSWORD must both be set (as Render
+# env vars) for /admin/metrics to be reachable at all. If either is unset,
+# require_admin_auth() returns 404 - the endpoint's existence is never
+# advertised on a deployment that hasn't configured it.
+ADMIN_METRICS_USER_ENV = "ADMIN_METRICS_USER"
+ADMIN_METRICS_PASSWORD_ENV = "ADMIN_METRICS_PASSWORD"
+
+# Not a secret - just decorrelates this hash from any other use of SHA-256
+# elsewhere in the codebase (e.g. API key hashing). Safe to keep in source.
+ANALYTICS_ID_PEPPER = os.getenv("ANALYTICS_ID_PEPPER", "quantaroute-analytics-v1")
+
+_admin_security = HTTPBasic(auto_error=False)
+
+
+def require_admin_auth(credentials: HTTPBasicCredentials | None = Depends(_admin_security)) -> None:
+    admin_user = os.getenv(ADMIN_METRICS_USER_ENV, "")
+    admin_password = os.getenv(ADMIN_METRICS_PASSWORD_ENV, "")
+    if not admin_user or not admin_password:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    if credentials is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Admin authentication required.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+    user_ok = secrets.compare_digest(credentials.username, admin_user)
+    password_ok = secrets.compare_digest(credentials.password, admin_password)
+    if not (user_ok and password_ok):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin credentials.",
+            headers={"WWW-Authenticate": "Basic"},
+        )
+
+
+def anonymous_session_id(request: Request) -> str | None:
+    """Best-effort, privacy-safe pseudonymous identifier for the 'repeat
+    anonymous users' metric. The raw IP address is never stored anywhere -
+    it's combined with the User-Agent and the current UTC calendar day into
+    a one-way SHA-256 hash, then discarded. Rotating daily means the same
+    visitor gets a stable id within one day but a different one the next
+    day, matching the approach privacy-focused analytics tools (Plausible,
+    Fathom) use specifically so this is never a long-term tracking id."""
+    try:
+        client_ip = request.client.host if request.client else ""
+        user_agent = request.headers.get("user-agent", "")
+        day_bucket = datetime.now(UTC).strftime("%Y-%m-%d")
+        raw = f"{client_ip}|{user_agent}|{day_bucket}|{ANALYTICS_ID_PEPPER}"
+        return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    except Exception:
+        return None
+
+
+def record_analytics(
+    event_name: str,
+    *,
+    anonymous_id: str | None = None,
+    input_method: str | None = None,
+    csv_format: str | None = None,
+    stop_count: int | None = None,
+    duration_ms: int | None = None,
+    error_category: str | None = None,
+) -> None:
+    """Best-effort analytics recording - mirrors record_route_history()'s
+    try/except/log shape: any failure here is swallowed and logged, and can
+    never affect route optimisation behaviour or the HTTP response."""
+    try:
+        record_analytics_event(
+            event_name,
+            anonymous_id=anonymous_id,
+            input_method=input_method,
+            csv_format=csv_format,
+            stop_count=stop_count,
+            duration_ms=duration_ms,
+            error_category=error_category,
+            app_build=APP_BUILD,
+        )
+    except Exception as e:
+        logger.debug(f"Failed to record analytics event '{event_name}': {e}")
+
+
+# The pasted-CSV virtual file is always given this exact name by the
+# frontend (see frontend/index.html: submitPastedCsv()). Used purely to
+# label the input_method analytics dimension (csv_upload vs csv_paste) -
+# never affects parsing, validation, or routing behaviour either way.
+PASTED_CSV_VIRTUAL_FILENAME = "pasted-addresses.csv"
+
+
+def csv_input_method(filename: str) -> str:
+    return "csv_paste" if filename == PASTED_CSV_VIRTUAL_FILENAME else "csv_upload"
+
+
+ANALYTICS_RANGE_WINDOWS: dict[str, timedelta | None] = {
+    "24h": timedelta(hours=24),
+    "7d": timedelta(days=7),
+    "30d": timedelta(days=30),
+    "all": None,
+}
+
+
+def resolve_analytics_since(range_key: str) -> datetime | None:
+    window = ANALYTICS_RANGE_WINDOWS.get(range_key, ANALYTICS_RANGE_WINDOWS["7d"])
+    if window is None:
+        return None
+    return datetime.now(UTC) - window
 
 
 def is_csv_header_row(cells: list[str]) -> bool:
@@ -981,6 +1107,9 @@ async def upload_csv(
     start_address: str | None = None,
     return_to_start: bool = False,
 ):
+    anon_id = anonymous_session_id(request)
+    input_method = csv_input_method(file.filename or "")
+
     if not file.filename.lower().endswith(".csv"):
         raise HTTPException(
             status_code=400,
@@ -991,15 +1120,25 @@ async def upload_csv(
 
     detected_rows = list(csv.reader(io.StringIO(decoded)))
     detected_format = classify_csv_format(detected_rows)
+    csv_format_label = CSV_FORMAT_LABELS.get(detected_format, "legacy")
     # Reported via a response header (not the response body/schema) so this
     # is purely additive - it doesn't touch RouteResponse or the routing
     # pipeline at all.
-    response.headers["X-CSV-Format-Detected"] = CSV_FORMAT_LABELS.get(detected_format, "legacy")
+    response.headers["X-CSV-Format-Detected"] = csv_format_label
 
     normalised_rows = parse_csv_rows_normalised(decoded)
     # stop_count is captured/validated by parse_csv_rows_normalised but not
     # threaded into the routing pipeline yet - only address is used below.
     addresses = [row["address"] for row in normalised_rows if row.get("address")]
+
+    record_analytics(
+        "input_submitted",
+        anonymous_id=anon_id,
+        input_method=input_method,
+        csv_format=csv_format_label,
+        stop_count=len(addresses),
+    )
+
     if len(addresses) < 2:
         raise HTTPException(
             status_code=400,
@@ -1014,6 +1153,15 @@ async def upload_csv(
                 "them separately."
             ),
         )
+
+    record_analytics(
+        "route_started",
+        anonymous_id=anon_id,
+        input_method=input_method,
+        csv_format=csv_format_label,
+        stop_count=len(addresses),
+    )
+    started_at = time.perf_counter()
     try:
         result = await optimise_route(
             addresses=addresses,
@@ -1022,6 +1170,17 @@ async def upload_csv(
             return_to_start=return_to_start,
         )
     except RouteGeocodingError as e:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        record_analytics(
+            "route_failed", anonymous_id=anon_id, input_method=input_method,
+            csv_format=csv_format_label, stop_count=len(addresses),
+            duration_ms=duration_ms, error_category="geocoding",
+        )
+        record_analytics(
+            "geocoding_failed", anonymous_id=anon_id, input_method=input_method,
+            csv_format=csv_format_label, stop_count=len(addresses),
+            duration_ms=duration_ms, error_category="geocoding",
+        )
         logger.warning(f"CSV optimisation geocoding failed: {e.failed_addresses}")
         raise HTTPException(
             status_code=400,
@@ -1032,6 +1191,30 @@ async def upload_csv(
                 "details": e.as_details(),
             },
         )
+    except Exception:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        record_analytics(
+            "route_failed", anonymous_id=anon_id, input_method=input_method,
+            csv_format=csv_format_label, stop_count=len(addresses),
+            duration_ms=duration_ms, error_category="routing",
+        )
+        record_analytics(
+            "routing_failed", anonymous_id=anon_id, input_method=input_method,
+            csv_format=csv_format_label, stop_count=len(addresses),
+            duration_ms=duration_ms, error_category="routing",
+        )
+        raise
+
+    duration_ms = int((time.perf_counter() - started_at) * 1000)
+    record_analytics(
+        "route_completed",
+        anonymous_id=anon_id,
+        input_method=input_method,
+        csv_format=csv_format_label,
+        stop_count=result.get("stops_count") or len(addresses),
+        duration_ms=duration_ms,
+    )
+
     route_id = record_route_history(
         driver_name=driver_name,
         result=result,
@@ -1273,10 +1456,27 @@ async def api_optimise_route(
 
 @app.post("/quantum/route-optimise", response_model=RouteResponse)
 async def route_optimise(route_request: RouteRequest, request: Request):
+    anon_id = anonymous_session_id(request)
+    stop_count = len(route_request.addresses)
+    record_analytics(
+        "input_submitted",
+        anonymous_id=anon_id,
+        input_method="plain_addresses",
+        stop_count=stop_count,
+    )
+
     if len(route_request.addresses) < 2:
         raise HTTPException(status_code=400, detail="Need at least 2 addresses")
     if len(route_request.addresses) > 50:
         raise HTTPException(status_code=400, detail="Maximum 50 addresses per request")
+
+    record_analytics(
+        "route_started",
+        anonymous_id=anon_id,
+        input_method="plain_addresses",
+        stop_count=stop_count,
+    )
+    started_at = time.perf_counter()
     try:
         result = await optimise_route(
             addresses=route_request.addresses,
@@ -1284,6 +1484,7 @@ async def route_optimise(route_request: RouteRequest, request: Request):
             start_address=route_request.start_address,
             return_to_start=route_request.return_to_start,
         )
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
         route_id = record_route_history(
             driver_name=route_request.driver_name,
             result=result,
@@ -1298,8 +1499,24 @@ async def route_optimise(route_request: RouteRequest, request: Request):
         )
         if route_id is not None:
             result["route_sheet_url"] = build_route_sheet_url(request, route_id)
+        record_analytics(
+            "route_completed",
+            anonymous_id=anon_id,
+            input_method="plain_addresses",
+            stop_count=result.get("stops_count") or stop_count,
+            duration_ms=duration_ms,
+        )
         return RouteResponse(**{k: result.get(k) for k in RouteResponse.model_fields})
     except RouteGeocodingError as e:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        record_analytics(
+            "route_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="geocoding",
+        )
+        record_analytics(
+            "geocoding_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="geocoding",
+        )
         logger.warning(f"Optimisation geocoding failed: {e.failed_addresses}")
         raise HTTPException(
             status_code=400,
@@ -1311,11 +1528,101 @@ async def route_optimise(route_request: RouteRequest, request: Request):
             },
         )
     except ValueError as e:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        record_analytics(
+            "route_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="routing",
+        )
+        record_analytics(
+            "routing_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="routing",
+        )
         logger.warning(f"Optimisation validation failed: {e}")
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
+        duration_ms = int((time.perf_counter() - started_at) * 1000)
+        record_analytics(
+            "route_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="unexpected",
+        )
+        record_analytics(
+            "routing_failed", anonymous_id=anon_id, input_method="plain_addresses",
+            stop_count=stop_count, duration_ms=duration_ms, error_category="unexpected",
+        )
         logger.error(f"Optimisation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class FeedbackRequest(BaseModel):
+    stop_count: int | None = None
+
+
+@app.post("/api/feedback", include_in_schema=False)
+async def submit_feedback(request: Request, feedback: FeedbackRequest | None = None):
+    """Minimal placeholder so the analytics event taxonomy is complete.
+    There is no feedback UI in the product yet - this only records that a
+    feedback_submitted event occurred. No free-text feedback content, name,
+    or contact info is accepted or stored (analytics_events has no column
+    for it). Wire an actual feedback form to this endpoint later if wanted."""
+    anon_id = anonymous_session_id(request)
+    record_analytics(
+        "feedback_submitted",
+        anonymous_id=anon_id,
+        stop_count=(feedback.stop_count if feedback else None),
+    )
+    return {"received": True}
+
+
+@app.get("/admin/metrics", response_class=HTMLResponse, include_in_schema=False)
+def admin_metrics_page(_: None = Depends(require_admin_auth)):
+    return HTMLResponse(build_admin_metrics_html())
+
+
+@app.get("/admin/metrics/data", include_in_schema=False)
+def admin_metrics_data(range: str = "7d", _: None = Depends(require_admin_auth)):
+    range_key = range if range in ANALYTICS_RANGE_WINDOWS else "7d"
+    since = resolve_analytics_since(range_key)
+    summary = get_analytics_summary(since)
+    recent_events = get_analytics_events_since(since, limit=100)
+    return {
+        "range": range_key,
+        "summary": summary,
+        "recent_events": recent_events,
+    }
+
+
+@app.get("/admin/metrics/export.csv", include_in_schema=False)
+def admin_metrics_export(range: str = "all", _: None = Depends(require_admin_auth)):
+    range_key = range if range in ANALYTICS_RANGE_WINDOWS else "all"
+    since = resolve_analytics_since(range_key)
+    events = get_analytics_events_since(since)
+
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow([
+        "event_name", "occurred_at", "anonymous_id", "input_method",
+        "csv_format", "stop_count", "duration_ms", "error_category", "app_build",
+    ])
+    for event in events:
+        writer.writerow([
+            event.get("event_name", ""),
+            event.get("occurred_at", ""),
+            event.get("anonymous_id") or "",
+            event.get("input_method") or "",
+            event.get("csv_format") or "",
+            event.get("stop_count") if event.get("stop_count") is not None else "",
+            event.get("duration_ms") if event.get("duration_ms") is not None else "",
+            event.get("error_category") or "",
+            event.get("app_build") or "",
+        ])
+
+    return PlainTextResponse(
+        buffer.getvalue(),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="quantaroute-analytics-{range_key}.csv"'
+        },
+    )
 
 if __name__ == "__main__":
     import uvicorn

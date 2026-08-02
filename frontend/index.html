@@ -933,6 +933,7 @@
     </footer>
   </div>
 
+  <script src="/assets/csv-paste-detect.js"></script>
   <script>
     const API_URL = "https://quantaroute.onrender.com/quantum/route-optimise";
     const HISTORY_URL = new URL("/api/routes/recent", API_URL).toString();
@@ -1188,9 +1189,21 @@
       }
     }
 
-    async function uploadCsvFile(file) {
+    // uploadCsvFile is the single place that talks to POST /quantum/upload-csv.
+    // Both the real file-picker (below) and pasted CSV-shaped content in the
+    // Addresses textarea (submitPastedCsv, further down) funnel through this
+    // one function, so there's exactly one code path that sends CSV content
+    // to the backend and renders its response - only the status copy differs.
+    async function uploadCsvFile(file, options = {}) {
+      const displayName = options.displayName || file.name;
+      const processingMessage = options.processingMessage || `Uploading ${displayName}...`;
+      const successMessageFor = options.successMessageFor
+        || ((formatNote) => (formatNote
+          ? `${displayName} uploaded (${formatNote}) — route optimised below.`
+          : `${displayName} uploaded — route optimised below.`));
+
       clearMessage();
-      fileStatus.textContent = `Uploading ${file.name}...`;
+      fileStatus.textContent = processingMessage;
       setLoading(true);
 
       try {
@@ -1222,17 +1235,34 @@
 
         const detectedFormat = response.headers.get("X-CSV-Format-Detected");
         const formatNote = CSV_FORMAT_DETECTED_LABELS[detectedFormat];
-        fileStatus.textContent = formatNote
-          ? `${file.name} uploaded (${formatNote}) — route optimised below.`
-          : `${file.name} uploaded — route optimised below.`;
+        fileStatus.textContent = successMessageFor(formatNote);
         renderResults(data);
         fetchHistory();
       } catch (error) {
-        fileStatus.textContent = file.name;
-        showMessage(`Could not process ${file.name}. ${error.message || "Try again, or paste the addresses above instead."}`.trim());
+        fileStatus.textContent = displayName;
+        showMessage(`Could not process ${displayName}. ${error.message || "Try again, or paste the addresses above instead."}`.trim());
       } finally {
         setLoading(false);
       }
+    }
+
+    // If the Addresses textarea contains something that looks like one of
+    // the three supported CSV shapes (see frontend/assets/csv-paste-detect.js),
+    // route it through the same backend CSV parser the Upload CSV button
+    // uses, instead of sending each line as a literal address. This fixes
+    // pasted CSV headers (e.g. "Property Name,Address,Postcode,Type") being
+    // sent to the geocoder as if they were a real delivery address.
+    async function submitPastedCsv(rawText) {
+      const csvBlob = new Blob([rawText], { type: "text/csv" });
+      const virtualFile = new File([csvBlob], "pasted-addresses.csv", { type: "text/csv" });
+
+      await uploadCsvFile(virtualFile, {
+        displayName: "pasted CSV content",
+        processingMessage: "Detected CSV formatting in your pasted addresses — processing...",
+        successMessageFor: (formatNote) => (formatNote
+          ? `Pasted addresses processed as CSV (${formatNote}) — route optimised below.`
+          : "Pasted addresses processed as CSV — route optimised below.")
+      });
     }
 
     csvFile.addEventListener("change", () => {
@@ -1247,6 +1277,16 @@
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       clearMessage();
+
+      // Detect CSV-shaped pasted content BEFORE the plain-address parsing
+      // below, using the raw textarea text (parseTextarea()'s per-line
+      // cleanup strips leading/trailing commas and quotes, which would
+      // corrupt real CSV syntax). Anything that doesn't look CSV-shaped
+      // falls through to the existing plain-address flow, unchanged.
+      if (detectPastedCsvShape(addresses.value)) {
+        await submitPastedCsv(addresses.value);
+        return;
+      }
 
       const stops = parseTextarea();
       if (stops.length < 2) {

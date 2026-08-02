@@ -93,6 +93,18 @@ content also lives in `examples/csv-format-postcode-number.csv` and
 On successful upload, the app also shows a subtle note confirming which
 format was detected (e.g. "uploaded (Postcode,Number format detected)").
 
+**Pasting CSV content into the Addresses box also works.** If the text
+pasted into the "Addresses" textarea looks like one of the three CSV shapes
+above (a recognised header row, or consistent two-column
+postcode/stop-count lines), the frontend detects that shape
+(`frontend/assets/csv-paste-detect.js`) and sends it to the same
+`POST /quantum/upload-csv` endpoint and parser the Upload CSV button uses,
+instead of treating each line as a literal address. This is shape detection
+only - the actual parsing and validation are still done exclusively by the
+backend, so there's one parser, not two. Plain address lists pasted into
+the textarea (no header, not a clean postcode/number shape) are unaffected
+and continue to go straight to `POST /quantum/route-optimise` as before.
+
 ## Public API
 
 POST `/api/optimise-route`
@@ -382,6 +394,14 @@ Then visit `http://localhost:8000`.
 cd C:\Users\rw718\Desktop\QuantaRoute
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
+```
+
+Frontend CSV-paste detection (no dependencies, uses Node's built-in test
+runner - Node 18+):
+
+```powershell
+cd C:\Users\rw718\Desktop\QuantaRoute
+node --test tests/frontend/test_csv_paste_detect.js
 ```
 
 MCP checks:

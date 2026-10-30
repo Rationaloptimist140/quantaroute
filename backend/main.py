@@ -1090,6 +1090,16 @@ def landing_page():
 def developers_page():
     return frontend_file("developers.html")
 
+
+@app.get("/sitemap.xml", include_in_schema=False)
+def sitemap():
+    return FileResponse(FRONTEND_DIR.parent / "sitemap.xml", media_type="application/xml")
+
+
+@app.get("/robots.txt", include_in_schema=False)
+def robots():
+    return FileResponse(FRONTEND_DIR.parent / "robots.txt", media_type="text/plain")
+
 @app.get("/pricing", include_in_schema=False)
 def pricing_page():
     """QuantaRoute has no paid tiers - this route is kept reachable (rather

@@ -2,7 +2,7 @@
 
 Turn delivery stops into a driver-ready Google Maps route in seconds.
 
-QuantaRoute helps UK couriers and small delivery operators reduce wasted miles by optimising stop order, estimating fuel savings, and creating WhatsApp-ready Google Maps links. No app install needed. **QuantaRoute is free to use, for everyone, with no account or payment required.**
+QuantaRoute helps UK couriers and small delivery operators reduce wasted miles by optimising stop order, estimating fuel savings, and creating WhatsApp-ready Google Maps links. No app install needed. **The web planner is free to use, for everyone, with no account or payment required.** The programmatic Agent API is pay per use ($0.05 USDC per call via x402 — see below).
 
 ## Live Product
 
@@ -136,14 +136,28 @@ When a valid API key is supplied, the response includes an `api_client` object
 with `label`, `usage_count_current_month`, and `monthly_limit`. Invalid or
 inactive keys are rejected with structured `401` JSON. Keys that exceed their
 monthly limit return structured `429` JSON. Requests without a key work the
-same way — the API is free either way.
+same way. Every call costs $0.05 USDC via x402 (see Payment below); an unpaid
+call gets HTTP `402` with the payment requirements.
+
+## Payment (x402)
+
+The Agent API is pay per use: **$0.05 USDC per optimisation**, paid with USDC
+on Base via the [x402 protocol](https://x402.org). Call the endpoint without
+payment and you get `402 Payment Required` with the price, network and pay-to
+wallet; pay with an x402 client (or any EIP-3009 USDC authorisation), then
+retry with the `X-PAYMENT` header. Live price and network:
+`GET /api/x402/status`. The web planner (`/quantum/*`) stays free.
+
+Default is Base Sepolia testnet — no real money moves. For real USDC on Base
+mainnet, set `X402_NETWORK=eip155:8453` and `X402_FACILITATOR_URL` to a
+production facilitator (e.g. Coinbase CDP). The x402.org facilitator is
+testnet-only. Full details: `docs/x402-agent-api-payments.md`.
 
 ## API Keys
 
 API keys are entirely optional. They give partners and developers a dedicated
 monthly request allowance when integrating with the public API — they are
-**not** a payment or billing mechanism; QuantaRoute has no billing system at
-all. Raw keys are not stored; the backend stores a SHA-256 hash.
+**not** a payment mechanism; payment is per call via x402 (see above). Raw keys are not stored; the backend stores a SHA-256 hash.
 
 Important: `scripts/create_api_key.py` writes to whichever storage backend the
 script can see. If you run it locally without `DATABASE_URL`, it creates the key
@@ -296,7 +310,7 @@ Safety notes:
 - Distance and fuel savings are estimates.
 - QuantaRoute does not guarantee the mathematically shortest route in all cases.
 - Drivers must follow road laws, live traffic conditions, vehicle restrictions, and professional judgement.
-- QuantaRoute is free to use. There is no payment provider, checkout, or billing system anywhere in this codebase.
+- QuantaRoute is free to use. The Agent API is pay per use ($0.05 USDC per call via x402); see `docs/x402-agent-api-payments.md`.
 
 Local API test:
 
@@ -360,8 +374,9 @@ MCP config example:
 
 ## Pricing
 
-QuantaRoute is free. There is no subscription, no per-route fee, and no card
-required. See `/pricing` for the current pricing page.
+The web planner is free — no subscription, no per-route fee, no card
+required. The Agent API is pay per use: $0.05 USDC per call via x402.
+See `/pricing` for the current pricing page.
 
 ## Safety
 
@@ -375,9 +390,9 @@ QuantaRoute provides estimated route optimisation and fuel-saving calculations. 
 - Routing data: public geocoding and OSRM road-network distances
 - Deployment: Render
 
-QuantaRoute has no billing/payment integration. It previously had a Stripe-based
-monthly plan; this was permanently removed on 2026-07-30 so the product is free
-for everyone. See `PROJECT_NOTES.md` for history.
+Payments: x402 pay-per-use USDC on the Agent API only ($0.05 per call). The
+web planner has no billing. A Stripe-based monthly plan was permanently
+removed on 2026-07-30; see `PROJECT_NOTES.md` for history.
 
 ## Development
 

@@ -301,9 +301,9 @@
 
     <section class="card" aria-labelledby="apiTitle">
       <h2 id="apiTitle">Public API</h2>
-      <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route. The API is free to use.</p>
+      <p class="lead">Use the public API when your app, assistant, or business workflow needs to optimise a small UK multi-drop route. The API is pay per use: <strong>$0.05 USDC per optimisation</strong>, paid with USDC on Base via x402. The web planner stays free.</p>
       <p><span class="endpoint">POST /api/optimise-route</span></p>
-      <p class="note"><strong>API keys:</strong> optional. If you have a key, send it with <code>X-API-Key</code>. Invalid or inactive keys return <code>401</code>; keys that exceed their monthly limit return <code>429</code>. Keys are a convenience for partners who want a dedicated rate allowance, not a payment mechanism - QuantaRoute has no billing system.</p>
+      <p class="note"><strong>API keys:</strong> optional. If you have a key, send it with <code>X-API-Key</code>. Invalid or inactive keys return <code>401</code>; keys that exceed their monthly limit return <code>429</code>. Keys are a convenience for partners who want a dedicated rate allowance. Payment is separate: every call costs $0.05 USDC via x402 — an unpaid call gets <code>402 Payment Required</code> with the payment details. See <code>GET /api/x402/status</code> for the live price and network.</p>
 
       <div class="grid two">
         <article class="mini-card">
@@ -363,6 +363,8 @@
     "Estimated savings can vary due to traffic, road closures, driver behaviour, vehicle type, and delivery constraints."
   ]
 }</code></pre>
+      <h3>Payment (x402)</h3>
+      <p class="note">Each call costs <strong>$0.05 USDC</strong> on Base, paid via the x402 protocol. Call the endpoint without payment and you get <code>402 Payment Required</code> with the price, network and pay-to wallet. Pay with an x402 client (or any EIP-3009 USDC authorisation), then retry with the <code>X-PAYMENT</code> header. Live price and network: <code>GET /api/x402/status</code>. The web planner is unaffected and stays free.</p>
     </section>
 
     <section class="card" aria-labelledby="statusTitle">
@@ -378,7 +380,7 @@
         </article>
         <article class="mini-card">
           <h3>Pricing</h3>
-          <p>Free - no billing system</p>
+          <p>Agent API: $0.05 USDC per call (x402). Web planner: free.</p>
         </article>
         <article class="mini-card">
           <h3>Printable route sheet</h3>
@@ -432,7 +434,7 @@ npm start</code></pre>
 
     <section class="card" aria-labelledby="keysTitle">
       <h2 id="keysTitle">API Keys</h2>
-      <p class="lead">API keys are optional. They give partners and developers a dedicated rate allowance (monthly request limit) when integrating with the public API. QuantaRoute is free either way - keys are not a payment mechanism.</p>
+      <p class="lead">API keys are optional. They give partners and developers a dedicated rate allowance (monthly request limit) when integrating with the public API. Keys identify you; payment is per call via x402 ($0.05 USDC).</p>
       <p class="note">Keys are stored as one-way hashes. The raw key is only shown once when created.</p>
       <p class="note"><strong>Production warning:</strong> running <code>scripts/create_api_key.py</code> locally without <code>DATABASE_URL</code> creates the key in local SQLite, not live Render Postgres. That key will not work against production.</p>
       <h3>Method 1: local script with production DATABASE_URL</h3>
@@ -453,7 +455,7 @@ python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100<
   -H "Content-Type: application/json" \
   -H "X-API-Key: qr_your_key_here" \
   -d "{\"start\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"stops\":[\"Drake Circus Shopping Centre, 1 Charles Street, Plymouth, PL1 1EA\",\"Royal William Yard, Plymouth, PL1 3RP\"],\"end\":\"Plymouth Railway Station, North Road, Plymouth, PL4 6AB\",\"vehicle\":\"van\",\"optimise_for\":\"distance\"}"</code></pre>
-      <p class="note">No-key API usage works the same as keyed usage - both are free. Keys exist purely for partners who want a dedicated, predictable monthly request allowance.</p>
+      <p class="note">Every API call costs $0.05 USDC via x402, with or without a key. Keys exist purely for partners who want a dedicated, predictable monthly request allowance.</p>
     </section>
 
     <section class="card" aria-labelledby="docsTitle">
@@ -469,7 +471,7 @@ python ../scripts/create_api_key.py --label "Rana test key" --monthly-limit 100<
       <h2 id="safetyTitle">Safety Notes</h2>
       <p class="note">QuantaRoute provides estimated route optimisation and fuel-saving calculations. It does not guarantee the mathematically shortest route in all cases. Drivers must follow road laws, live traffic, road closures, vehicle restrictions, and professional judgement.</p>
       <p class="note">Do not include depot/start/end inside stops unless it is a real delivery stop.</p>
-      <p class="note">QuantaRoute is free to use, with no billing, trial period, or payment provider involved.</p>
+      <p class="note">The web planner is free to use, with no billing, trial period, or payment provider involved. The Agent API is pay per use ($0.05 USDC per call via x402).</p>
     </section>
 
     <footer class="footer">
